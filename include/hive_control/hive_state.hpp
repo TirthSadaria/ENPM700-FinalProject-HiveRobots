@@ -27,7 +27,8 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 
-namespace hive_control {
+namespace hive_control
+{
 
 // Forward declaration
 class HiveController;
@@ -36,8 +37,9 @@ class HiveController;
  * @class HiveState
  * @brief Abstract base class for HIVE states using the State design pattern
  */
-class HiveState {
- public:
+class HiveState
+{
+public:
   virtual ~HiveState() = default;
 
   /**
@@ -66,15 +68,16 @@ class HiveState {
  * @class IdleState
  * @brief State for holding position / waiting for mission start
  */
-class IdleState : public HiveState {
- public:
+class IdleState : public HiveState
+{
+public:
   void handle(
     HiveController * context,
     const sensor_msgs::msg::LaserScan::SharedPtr & scan) override;
 
   geometry_msgs::msg::Twist getVelocityCommand() override;
 
-  std::string getStateName() const override { return "IDLE"; }
+  std::string getStateName() const override {return "IDLE";}
 };
 
 /**
@@ -84,8 +87,9 @@ class IdleState : public HiveState {
  * Initially this can reuse the "move forward until obstacle" behavior
  * from the Walker ForwardState, then expand to frontier-based logic later.
  */
-class ExploringState : public HiveState {
- public:
+class ExploringState : public HiveState
+{
+public:
   ExploringState();
   void handle(
     HiveController * context,
@@ -93,9 +97,9 @@ class ExploringState : public HiveState {
 
   geometry_msgs::msg::Twist getVelocityCommand() override;
 
-  std::string getStateName() const override { return "EXPLORING"; }
+  std::string getStateName() const override {return "EXPLORING";}
 
- private:
+private:
   /**
    * @brief Check if obstacle is detected
    * @param scan Laser scan data
@@ -115,8 +119,9 @@ class ExploringState : public HiveState {
  * For now this can mirror RotateState behavior (rotate until path clear),
  * and later be extended to follow a planned path home.
  */
-class ReturnState : public HiveState {
- public:
+class ReturnState : public HiveState
+{
+public:
   /**
    * @brief Constructor
    * @param clockwise Direction of rotation
@@ -129,11 +134,12 @@ class ReturnState : public HiveState {
 
   geometry_msgs::msg::Twist getVelocityCommand() override;
 
-  std::string getStateName() const override {
+  std::string getStateName() const override
+  {
     return clockwise_ ? "RETURN_CLOCKWISE" : "RETURN_COUNTERCLOCKWISE";
   }
 
- private:
+private:
   /**
    * @brief Check if path ahead is clear
    * @param scan Laser scan data

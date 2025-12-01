@@ -36,8 +36,9 @@ using std::chrono_literals::operator""ms;
  * This node subscribes to laser scan data and publishes velocity commands
  * by delegating decision logic to the State-pattern-based HiveContext.
  */
-class HiveControllerNode : public rclcpp::Node {
- public:
+class HiveControllerNode : public rclcpp::Node
+{
+public:
   /**
    * @brief Constructor - sets up publishers, subscribers, and timer
    */
@@ -75,7 +76,7 @@ class HiveControllerNode : public rclcpp::Node {
     RCLCPP_INFO(this->get_logger(), "HIVE controller node initialized");
   }
 
- private:
+private:
   /**
    * @brief Callback for laser scan messages
    * @param msg Laser scan data

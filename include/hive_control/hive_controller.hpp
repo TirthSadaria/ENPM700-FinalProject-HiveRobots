@@ -27,7 +27,8 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 
-namespace hive_control {
+namespace hive_control
+{
 
 class HiveState;  // forward declaration for State pattern
 
@@ -35,7 +36,8 @@ class HiveState;  // forward declaration for State pattern
  * @enum StateID
  * @brief High-level identifiers for controller states
  */
-enum class StateID {
+enum class StateID
+{
   IDLE,
   EXPLORING,
   RETURN
@@ -49,8 +51,9 @@ enum class StateID {
  * for the HIVE robot. It can also track battery level and choose
  * behaviors like exploring vs returning home.
  */
-class HiveController {
- public:
+class HiveController
+{
+public:
   /**
    * @brief Constructor - initializes in IDLE state
    */
@@ -78,12 +81,12 @@ class HiveController {
    * @brief Get current rotation direction
    * @return true for clockwise, false for counterclockwise
    */
-  bool isClockwise() const { return clockwise_; }
+  bool isClockwise() const {return clockwise_;}
 
   /**
    * @brief Toggle rotation direction for next rotation
    */
-  void toggleRotationDirection() { clockwise_ = !clockwise_; }
+  void toggleRotationDirection() {clockwise_ = !clockwise_;}
 
   /**
    * @brief Get current state name (for debugging/logging)
@@ -94,19 +97,19 @@ class HiveController {
   /**
    * @brief Set the simulated battery level [0.0, 1.0]
    */
-  void setBatteryLevel(double level) { battery_level_ = level; }
+  void setBatteryLevel(double level) {battery_level_ = level;}
 
   /**
    * @brief Get current battery level
    */
-  double getBatteryLevel() const { return battery_level_; }
+  double getBatteryLevel() const {return battery_level_;}
 
   /**
    * @brief Get current high-level state identifier
    */
-  StateID getCurrentStateId() const { return current_state_id_; }
+  StateID getCurrentStateId() const {return current_state_id_;}
 
- private:
+private:
   std::shared_ptr<HiveState> current_state_;  ///< Current concrete state
   bool clockwise_;                            ///< Rotation direction flag
   double battery_level_;                      ///< Simulated battery level
