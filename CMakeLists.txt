@@ -76,6 +76,13 @@ install(
   DESTINATION include
 )
 
+install(DIRECTORY
+  launch
+  worlds  
+  config
+  DESTINATION share/${PROJECT_NAME}/
+)
+
 # ------------------------------------------------------------------------------
 # Testing / linting
 # ------------------------------------------------------------------------------

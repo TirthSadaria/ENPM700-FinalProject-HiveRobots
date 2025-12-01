@@ -2,13 +2,14 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>hive_control</name>
-  <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="shreya05@umd.edu">shreya</maintainer>
-  <license>TODO: License declaration</license>
+  <version>1.0.0</version>
+  <description>HIVE Multi-Robot SLAM Control Package with State Pattern Implementation</description>
+  <maintainer email="shreya05@umd.edu">Shreya Kalyanaraman</maintainer>
+  <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <!-- Existing dependencies -->
   <depend>rclcpp</depend>
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
@@ -16,8 +17,29 @@
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
 
+  <!-- Additional dependencies for multi-robot SLAM -->
+  <depend>std_msgs</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>map_msgs</depend>
+  
+  <!-- SLAM dependencies -->
+  <depend>slam_toolbox</depend>
+  <depend>multirobot_map_merge</depend>
+  
+  <!-- Simulation dependencies -->
+  <depend>webots_ros2</depend>
+  <depend>robot_state_publisher</depend>
+  <depend>joint_state_publisher</depend>
+  
+  <!-- Visualization dependencies -->
+  <depend>rviz2</depend>
+  <depend>foxglove_bridge</depend>
+  
+  <!-- Testing dependencies -->
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>launch_testing</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
