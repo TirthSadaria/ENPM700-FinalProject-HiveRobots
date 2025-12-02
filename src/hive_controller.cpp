@@ -15,7 +15,7 @@
 /**
  * @file hive_controller.cpp
  * @brief Implementation of HiveContext and state classes
- * @author Shreya
+ * @author Shreya Kalyanaraman, Tirth Sadaria
  */
 
 #include "hive_control/hive_controller.hpp"
