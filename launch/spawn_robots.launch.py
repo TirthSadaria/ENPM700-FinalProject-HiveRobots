@@ -54,7 +54,17 @@ def generate_launch_description():
     # TB1 group
     tb1_group = GroupAction([
         PushRosNamespace('tb1'),
-
+        Node(
+            package='webots_ros2_driver',
+            executable='driver',
+            name='webots_driver',
+            output='screen',
+            parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+            additional_env={
+                'WEBOTS_ROBOT_NAME': 'tb1',
+                'WEBOTS_CONTROLLER_URL': 'tcp://localhost:1234'
+            }
+        ),
         Node(
             package='hive_control',
             executable='hive_controller_node',
@@ -75,7 +85,17 @@ def generate_launch_description():
     # TB2 group
     tb2_group = GroupAction([
         PushRosNamespace('tb2'),
-
+        Node(
+            package='webots_ros2_driver',
+            executable='driver',
+            name='webots_driver',
+            output='screen',
+            parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+            additional_env={
+                'WEBOTS_ROBOT_NAME': 'tb2',
+                'WEBOTS_CONTROLLER_URL': 'tcp://localhost:1235'
+            }
+        ),
         Node(
             package='hive_control',
             executable='hive_controller_node',
