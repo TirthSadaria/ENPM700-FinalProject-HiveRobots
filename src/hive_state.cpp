@@ -1,4 +1,21 @@
-// Copyright 2025 Shreya Kalyanaraman
+// Copyright 2025 Shreya Kalyanaraman, Tirth Sadaria
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+/**
+ * @file hive_state.cpp
+ * @brief Implementation of HiveState and concrete states
+ * @author Shreya Kalyanaraman, Tirth Sadaria
+ */
 #include "hive_control/hive_state.hpp"
 #include "hive_control/hive_controller.hpp"
 #include <algorithm>
