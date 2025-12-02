@@ -14,10 +14,10 @@ This project implements a multi-robot hive simulation using ROS 2 and Webots. Th
 
 ## Sprint Planning & Backlog
 
-- 📄 **Sprint Plan (Google Doc):** [Sprint Document](https://docs.google.com/document/d/1GciBjBSQgnnl1llGWNddDnd60kpwyzJ1LujE0GWnF4o/edit?usp=sharing)
+- **Sprint Plan (Google Doc):** [Sprint Document](https://docs.google.com/document/d/1GciBjBSQgnnl1llGWNddDnd60kpwyzJ1LujE0GWnF4o/edit?usp=sharing)
   - Includes sprint goals, driver/navigator logs, AIP categories, iteration notes, and meeting summaries.
 
-- 📊 **AIP Backlog (Google Sheet):** [Backlog & AIP Spreadsheet](https://docs.google.com/spreadsheets/d/18LbFuGbSA6lyf5C_sq3-1zMn88slf8hpBHtjBDwPiCw/edit?usp=sharing)
+- **AIP Backlog (Google Sheet):** [Backlog & AIP Spreadsheet](https://docs.google.com/spreadsheets/d/18LbFuGbSA6lyf5C_sq3-1zMn88slf8hpBHtjBDwPiCw/edit?usp=sharing)
   - Contains the full product backlog, task durations, priorities, and AIP tags (Ini, CL, IA, Ref, Test, Act, Bas, Rel, Ex).
 
 ## Features
