@@ -1,5 +1,9 @@
 # ENPM700 Final Project: Hive Robots
 
+[![Build Status](https://github.com/TirthSadaria/ENPM700-FinalProject-HiveRobots/actions/workflows/ci.yml/badge.svg)](https://github.com/TirthSadaria/ENPM700-FinalProject-HiveRobots/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/TirthSadaria/ENPM700-FinalProject-HiveRobots/graph/badge.svg?token=PLACEHOLDER_TOKEN)](https://codecov.io/gh/TirthSadaria/ENPM700-FinalProject-HiveRobots)
+
+---
 ## Overview
 This project implements a multi-robot hive simulation using ROS 2 and Webots. The goal is to develop collaborative robot behaviors, state machines, and mapping in a shared environment, following agile development practices.
 
