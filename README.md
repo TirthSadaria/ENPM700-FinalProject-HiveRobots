@@ -49,8 +49,20 @@ This project implements a multi-robot hive simulation using ROS 2 and Webots. Th
    source install/setup.bash
    ```
 4. Launch the simulation:
+   
+   **Basic multi-robot simulation:**
    ```bash
    ros2 launch hive_control spawn_robots.launch.py
+   ```
+   
+   **Multi-robot SLAM with mapping:**
+   ```bash
+   ros2 launch hive_control multi_robot_slam.launch.py
+   ```
+   
+   **Multi-robot SLAM with RViz visualization:**
+   ```bash
+   ros2 launch hive_control multi_robot_slam.launch.py rviz:=true
    ```
 
 ## UML Diagrams
