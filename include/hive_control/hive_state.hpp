@@ -81,76 +81,79 @@ public:
 };
 
 /**
- * @class ExploringState
- * @brief State for actively exploring the environment
- *
- * Initially this can reuse the "move forward until obstacle" behavior
- * from the Walker ForwardState, then expand to frontier-based logic later.
+ * @class SearchState
+ * @brief State for distributed search pattern in HIVE swarm
  */
-class ExploringState : public HiveState
+class SearchState : public HiveState
 {
 public:
-  ExploringState();
+  SearchState();
   void handle(
     HiveController * context,
     const sensor_msgs::msg::LaserScan::SharedPtr & scan) override;
 
   geometry_msgs::msg::Twist getVelocityCommand() override;
 
-  std::string getStateName() const override {return "EXPLORING";}
+  std::string getStateName() const override {return "SEARCH";}
 
 private:
-  /**
-   * @brief Check if obstacle is detected
-   * @param scan Laser scan data
-   * @return true if obstacle detected within threshold
-   */
-  bool isObstacleDetected(
-    const sensor_msgs::msg::LaserScan::SharedPtr & scan);
-
-  const double obstacle_distance_ = 0.5;   ///< Obstacle detection threshold (m)
-  const double linear_velocity_ = 0.2;     ///< Forward velocity (m/s)
+  bool isObstacleDetected(const sensor_msgs::msg::LaserScan::SharedPtr & scan);
+  bool needsCoordination() const;
+  
+  int search_duration_counter_ = 0;
+  const double obstacle_distance_ = 0.5;
+  const double linear_velocity_ = 0.1;
+  static constexpr int MAX_SEARCH_TIME = 100;
 };
 
 /**
- * @class ReturnState
- * @brief State for returning to deployment / home zone
- *
- * For now this can mirror RotateState behavior (rotate until path clear),
- * and later be extended to follow a planned path home.
+ * @class CoordinationState
+ * @brief State for coordinating with other robots to avoid conflicts
  */
-class ReturnState : public HiveState
+class CoordinationState : public HiveState
 {
 public:
-  /**
-   * @brief Constructor
-   * @param clockwise Direction of rotation
-   */
-  explicit ReturnState(bool clockwise);
-
+  explicit CoordinationState(bool turn_right = true);
   void handle(
     HiveController * context,
     const sensor_msgs::msg::LaserScan::SharedPtr & scan) override;
 
   geometry_msgs::msg::Twist getVelocityCommand() override;
 
-  std::string getStateName() const override
-  {
-    return clockwise_ ? "RETURN_CLOCKWISE" : "RETURN_COUNTERCLOCKWISE";
-  }
+  std::string getStateName() const override {return "COORDINATION";}
 
 private:
-  /**
-   * @brief Check if path ahead is clear
-   * @param scan Laser scan data
-   * @return true if path is clear
-   */
-  bool isPathClear(
-    const sensor_msgs::msg::LaserScan::SharedPtr & scan);
+  bool isPathClear(const sensor_msgs::msg::LaserScan::SharedPtr & scan);
+  
+  bool turn_right_;
+  int coordination_timer_ = 0;
+  const double angular_velocity_ = 0.5;
+  const double clear_distance_ = 0.7;
+  static constexpr int COORDINATION_TIME = 30;
+};
 
-  bool clockwise_;                        ///< Rotation direction
-  const double angular_velocity_ = 0.5;   ///< Rotation speed (rad/s)
-  const double clear_distance_ = 0.8;     ///< Minimum clear distance (m)
+/**
+ * @class ConvergenceState
+ * @brief State for converging to rendezvous point for map merging
+ */
+class ConvergenceState : public HiveState
+{
+public:
+  ConvergenceState();
+  void handle(
+    HiveController * context,
+    const sensor_msgs::msg::LaserScan::SharedPtr & scan) override;
+
+  geometry_msgs::msg::Twist getVelocityCommand() override;
+
+  std::string getStateName() const override {return "CONVERGENCE";}
+
+private:
+  bool isAtRendezvous() const;
+  
+  bool rotating_to_center_ = false;
+  const double linear_velocity_ = 0.1;
+  const double angular_velocity_ = 0.5;
 };
 
 }  // namespace hive_control

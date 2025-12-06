@@ -35,8 +35,8 @@ namespace hive_control
 HiveController::HiveController()
 : clockwise_(true)
 {
-  // Initialize in exploring state (equivalent to ForwardState in walker)
-  current_state_ = std::make_shared<ExploringState>();
+  // Initialize in search state for HIVE swarm behavior
+  current_state_ = std::make_shared<SearchState>();
 }
 
 void HiveController::processLaserScan(

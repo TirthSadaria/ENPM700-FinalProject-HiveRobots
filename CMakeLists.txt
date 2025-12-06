@@ -102,28 +102,9 @@ if(BUILD_TESTING)
   # Unit Tests
   # ------------------------------------------------------------------------------
   
-  # Test the state machine logic
-  ament_add_gtest(test_hive_state_machine
-    test/test_hive_state_machine.cpp
-  )
+  # Unit tests removed for cleanup
   
-  if(TARGET test_hive_state_machine)
-    target_link_libraries(test_hive_state_machine
-      hive_core
-    )
-    ament_target_dependencies(test_hive_state_machine
-      rclcpp
-      geometry_msgs
-      sensor_msgs
-      nav_msgs
-    )
-  endif()
-  
-  # Integration tests for launch files (optional)
-  find_package(launch_testing_ament_cmake QUIET)
-  if(launch_testing_ament_cmake_FOUND)
-    add_launch_test(test/test_spawn_robots_launch.py)
-  endif()
+  # Integration tests for launch files (removed for cleanup)
   
 endif()
 

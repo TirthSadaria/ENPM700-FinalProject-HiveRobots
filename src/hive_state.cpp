@@ -37,59 +37,124 @@ geometry_msgs::msg::Twist IdleState::getVelocityCommand()
   return geometry_msgs::msg::Twist();
 }
 
-// ================= ExploringState =================
-ExploringState::ExploringState() = default;
-void ExploringState::handle(
+// ================= SearchState =================
+SearchState::SearchState() = default;
+
+void SearchState::handle(
   HiveController * context,
   const sensor_msgs::msg::LaserScan::SharedPtr & scan)
 {
-  // Example: transition to ReturnState if obstacle detected
+  search_duration_counter_++;
+  
+  // Transition to coordination if obstacle detected
   if (isObstacleDetected(scan)) {
-    context->setState(std::make_shared<ReturnState>(context->isClockwise()));
-    context->toggleRotationDirection();
+    context->setState(std::make_shared<CoordinationState>(context->isClockwise()));
+    return;
+  }
+  
+  // Transition to convergence after maximum search time
+  if (search_duration_counter_ > MAX_SEARCH_TIME || needsCoordination()) {
+    context->setState(std::make_shared<ConvergenceState>());
   }
 }
-geometry_msgs::msg::Twist ExploringState::getVelocityCommand()
+
+geometry_msgs::msg::Twist SearchState::getVelocityCommand()
 {
   geometry_msgs::msg::Twist cmd;
   cmd.linear.x = linear_velocity_;
   return cmd;
 }
-bool ExploringState::isObstacleDetected(const sensor_msgs::msg::LaserScan::SharedPtr & scan)
+
+bool SearchState::isObstacleDetected(const sensor_msgs::msg::LaserScan::SharedPtr & scan)
 {
-  for (const auto & range : scan->ranges) {
-    if (range < obstacle_distance_) {
+  // Check front-facing sensors (middle third of scan)
+  size_t start_idx = scan->ranges.size() / 3;
+  size_t end_idx = 2 * scan->ranges.size() / 3;
+  
+  for (size_t i = start_idx; i < end_idx; ++i) {
+    if (scan->ranges[i] < obstacle_distance_) {
       return true;
     }
   }
   return false;
 }
 
-// ================= ReturnState =================
-ReturnState::ReturnState(bool clockwise)
-: clockwise_(clockwise) {}
-void ReturnState::handle(
+bool SearchState::needsCoordination() const
+{
+  // Simple heuristic: coordinate periodically to avoid robot conflicts
+  return (search_duration_counter_ % 50) == 0;
+}
+
+// ================= CoordinationState =================
+CoordinationState::CoordinationState(bool turn_right)
+: turn_right_(turn_right) {}
+
+void CoordinationState::handle(
   HiveController * context,
   const sensor_msgs::msg::LaserScan::SharedPtr & scan)
 {
-  if (isPathClear(scan)) {
-    context->setState(std::make_shared<ExploringState>());
+  coordination_timer_++;
+  
+  // Return to search if path is clear and coordination time elapsed
+  if (isPathClear(scan) && coordination_timer_ > COORDINATION_TIME) {
+    context->setState(std::make_shared<SearchState>());
+    context->toggleRotationDirection(); // Vary behavior for swarm diversity
   }
 }
-geometry_msgs::msg::Twist ReturnState::getVelocityCommand()
+
+geometry_msgs::msg::Twist CoordinationState::getVelocityCommand()
 {
   geometry_msgs::msg::Twist cmd;
-  cmd.angular.z = clockwise_ ? angular_velocity_ : -angular_velocity_;
+  cmd.angular.z = turn_right_ ? -angular_velocity_ : angular_velocity_;
   return cmd;
 }
-bool ReturnState::isPathClear(const sensor_msgs::msg::LaserScan::SharedPtr & scan)
+
+bool CoordinationState::isPathClear(const sensor_msgs::msg::LaserScan::SharedPtr & scan)
 {
-  for (const auto & range : scan->ranges) {
-    if (range < clear_distance_) {
+  // Check if front path is clear for resuming search
+  size_t start_idx = scan->ranges.size() / 3;
+  size_t end_idx = 2 * scan->ranges.size() / 3;
+  
+  for (size_t i = start_idx; i < end_idx; ++i) {
+    if (scan->ranges[i] < clear_distance_) {
       return false;
     }
   }
   return true;
+}
+
+// ================= ConvergenceState =================
+ConvergenceState::ConvergenceState() = default;
+
+void ConvergenceState::handle(
+  HiveController * context,
+  const sensor_msgs::msg::LaserScan::SharedPtr & scan)
+{
+  // Simple convergence behavior: move toward center, then rotate
+  if (isAtRendezvous()) {
+    rotating_to_center_ = true;
+    // In a real system, this would trigger map merging
+  }
+}
+
+geometry_msgs::msg::Twist ConvergenceState::getVelocityCommand()
+{
+  geometry_msgs::msg::Twist cmd;
+  
+  if (rotating_to_center_) {
+    cmd.angular.z = angular_velocity_;
+  } else {
+    cmd.linear.x = linear_velocity_;
+  }
+  
+  return cmd;
+}
+
+bool ConvergenceState::isAtRendezvous() const
+{
+  // Simplified: assume we've reached rendezvous after moving for some time
+  // In real system, this would check odometry/position
+  return false; // Placeholder - would use actual position check
 }
 
 } // namespace hive_control
