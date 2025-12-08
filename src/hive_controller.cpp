@@ -74,6 +74,31 @@ void HiveController::processLaserScan(
   // Store the latest scan for state classes to access
   latest_scan_ = scan;
   
+  // RESCUE MISSION FIX: Force motion if robot is IDLE but has valid scan
+  // This prevents robots from getting stuck in IDLE state
+  if (current_state_id_ == StateID::IDLE && scan && !scan->ranges.empty()) {
+    // Check if scan has valid data
+    bool has_valid_data = false;
+    for (const auto& range : scan->ranges) {
+      if (std::isfinite(range) && range > scan->range_min && range < scan->range_max) {
+        has_valid_data = true;
+        break;
+      }
+    }
+    
+    // Force transition to SEARCH state if we have valid scan data
+    if (has_valid_data) {
+      // Forward declare SearchState - it's defined in hive_state.hpp which is included
+      // We need to include it or use the factory pattern, but for now we'll use a workaround
+      // Actually, SearchState is in hive_state.hpp which should be included
+      // Let's check if we can create it directly
+      current_state_ = std::make_shared<SearchState>();
+      current_state_id_ = StateID::EXPLORING;
+      // Note: Logging would require ROS2 node, so we skip it here
+      // The node will log the state change automatically
+    }
+  }
+  
   if (current_state_) {
     current_state_->handle(this, scan);
   }

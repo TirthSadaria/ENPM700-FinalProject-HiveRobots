@@ -100,7 +100,6 @@ install(DIRECTORY
 install(PROGRAMS
   scripts/generate_world.py
   scripts/source_all_workspaces.sh
-  scripts/verify_robot_publishing.sh
   DESTINATION lib/${PROJECT_NAME}
 )
 

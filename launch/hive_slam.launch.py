@@ -280,6 +280,9 @@ def launch_setup(context, *args, **kwargs):
         robot_nodes.append(webots_controller)
 
         # Static TF from base_link to laser frame for each robot namespace
+        # CRITICAL: Add 180° rotation around Z to fix backwards lidar orientation
+        # Using quaternion format: x y z qx qy qz qw
+        # For 180° rotation around Z: qx=0, qy=0, qz=1, qw=0
         static_laser_tf = Node(
             package="tf2_ros",
             executable="static_transform_publisher",
@@ -291,7 +294,8 @@ def launch_setup(context, *args, **kwargs):
                 "0",  # x y z
                 "0",
                 "0",
-                "0",  # roll pitch yaw
+                "1",
+                "0",  # qx qy qz qw (180° rotation around Z)
                 f'{namespace}/base_link',  # parent frame
                 f'{namespace}/LDS-01',  # child (laser) frame - namespaced
             ],
@@ -374,8 +378,9 @@ def launch_setup(context, *args, **kwargs):
                     # Explicitly set laser range parameters to match LDS-01 sensor
                     "minimum_laser_range": 0.1,  # LDS-01 minimum range
                     "max_laser_range": 3.5,      # LDS-01 maximum range
-                    # Map update rate - faster = sharper but more CPU
-                    "map_update_interval": 0.5,  # Update every 0.5 seconds (faster = sharper maps)
+                    # Map update rate - very conservative to prevent queue overflow
+                    "map_update_interval": 2.0,  # Update every 2.0 seconds (very conservative)
+                    "transform_timeout": 10.0,  # Very long timeout to prevent queue overflow
                     # Set consistent map size for all robots to enable proper merging
                     "map_start_size": 1000,  # Large initial size (1000x1000 cells) for consistent maps
                     "resolution": 0.03,  # 3cm resolution - sharper maps, consistent across all robots

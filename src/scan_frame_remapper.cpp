@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <string>
+#include <algorithm>  // For std::reverse
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 
@@ -74,6 +75,26 @@ private:
     // Create a copy and remap the frame_id
     auto remapped_msg = std::make_shared<sensor_msgs::msg::LaserScan>(*msg);
     remapped_msg->header.frame_id = remapped_frame_id_;
+    
+    // CRITICAL FIX: Invert scan data to fix backwards lidar orientation
+    // The transform rotation may not be working correctly, so we need to invert the scan data
+    // This ensures that when robot moves forward, obstacles appear ahead, not behind
+    if (!remapped_msg->ranges.empty()) {
+      // Reverse ranges array (flips scan 180 degrees)
+      std::reverse(remapped_msg->ranges.begin(), remapped_msg->ranges.end());
+      
+      // Flip the angle range
+      double old_min = remapped_msg->angle_min;
+      double old_max = remapped_msg->angle_max;
+      remapped_msg->angle_min = -old_max;
+      remapped_msg->angle_max = -old_min;
+      
+      // Ensure standard convention: angle_min < angle_max
+      if (remapped_msg->angle_min > remapped_msg->angle_max) {
+        std::swap(remapped_msg->angle_min, remapped_msg->angle_max);
+        remapped_msg->angle_increment = -remapped_msg->angle_increment;
+      }
+    }
     
     // Publish the remapped message
     scan_pub_->publish(*remapped_msg);

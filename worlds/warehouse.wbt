@@ -38,6 +38,8 @@ TurtleBot3Burger {
   controller "<extern>"
   lidarSlot [
     LDS-01 {
+      translation 0 0 0
+      rotation 0 0 1 3.14159
       name "LDS-01"
     }
   ]
@@ -49,6 +51,8 @@ TurtleBot3Burger {
   controller "<extern>"
   lidarSlot [
     LDS-01 {
+      translation 0 0 0
+      rotation 0 0 1 3.14159
       name "LDS-01"
     }
   ]
@@ -60,6 +64,8 @@ TurtleBot3Burger {
   controller "<extern>"
   lidarSlot [
     LDS-01 {
+      translation 0 0 0
+      rotation 0 0 1 3.14159
       name "LDS-01"
     }
   ]
@@ -71,6 +77,8 @@ TurtleBot3Burger {
   controller "<extern>"
   lidarSlot [
     LDS-01 {
+      translation 0 0 0
+      rotation 0 0 1 3.14159
       name "LDS-01"
     }
   ]
@@ -82,6 +90,8 @@ TurtleBot3Burger {
   controller "<extern>"
   lidarSlot [
     LDS-01 {
+      translation 0 0 0
+      rotation 0 0 1 3.14159
       name "LDS-01"
     }
   ]
@@ -93,6 +103,8 @@ TurtleBot3Burger {
   controller "<extern>"
   lidarSlot [
     LDS-01 {
+      translation 0 0 0
+      rotation 0 0 1 3.14159
       name "LDS-01"
     }
   ]
@@ -104,6 +116,8 @@ TurtleBot3Burger {
   controller "<extern>"
   lidarSlot [
     LDS-01 {
+      translation 0 0 0
+      rotation 0 0 1 3.14159
       name "LDS-01"
     }
   ]
@@ -115,6 +129,8 @@ TurtleBot3Burger {
   controller "<extern>"
   lidarSlot [
     LDS-01 {
+      translation 0 0 0
+      rotation 0 0 1 3.14159
       name "LDS-01"
     }
   ]
@@ -126,6 +142,8 @@ TurtleBot3Burger {
   controller "<extern>"
   lidarSlot [
     LDS-01 {
+      translation 0 0 0
+      rotation 0 0 1 3.14159
       name "LDS-01"
     }
   ]
@@ -137,6 +155,8 @@ TurtleBot3Burger {
   controller "<extern>"
   lidarSlot [
     LDS-01 {
+      translation 0 0 0
+      rotation 0 0 1 3.14159
       name "LDS-01"
     }
   ]

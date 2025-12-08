@@ -167,6 +167,17 @@ private:
       last_state = current_state;
     }
     
+    // RESCUE MISSION: Add detailed logging for debugging
+    static int log_counter = 0;
+    if (log_counter % 100 == 0) {  // Log every 100 scans (~10 seconds at 10Hz)
+      RCLCPP_INFO(this->get_logger(), 
+                  "RESCUE DEBUG - Current State: %s, Battery: %.2f, Scan valid: %s", 
+                  current_state.c_str(),
+                  controller_->getBatteryLevel(),
+                  (msg && !msg->ranges.empty()) ? "YES" : "NO");
+    }
+    log_counter++;
+    
     // Debug: Log scan reception with validation info
     static int scan_count = 0;
     scan_count++;
@@ -344,7 +355,7 @@ private:
   std::vector<MapGrowthData> map_growth_history_;  // Store history for growth rate calculation
   static constexpr double GROWTH_CHECK_INTERVAL = 30.0;  // Check growth every 30 seconds
   static constexpr double MIN_GROWTH_RATE = 0.01;  // 1% growth threshold
-  static constexpr double MIN_EXPLORATION_TIME = 120.0;  // Minimum 120 seconds (2 minutes) before checking - balanced for coverage and speed
+  static constexpr double MIN_EXPLORATION_TIME = 300.0;  // Minimum 300 seconds (5 minutes) - extended for rescue mission to ensure complete mapping
   
   /// Timer for publishing commands
   rclcpp::TimerBase::SharedPtr timer_;
