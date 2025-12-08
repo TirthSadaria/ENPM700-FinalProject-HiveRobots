@@ -6,6 +6,7 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/project
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/robots/robotis/turtlebot/protos/TurtleBot3Burger.proto"
 
 WorldInfo {
+  basicTimeStep 20
 }
 Viewpoint {
   orientation -0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0944
@@ -30,39 +31,113 @@ RectangleArena {
     metalness 0
   }
 }
+# Robot 1: Center
 TurtleBot3Burger {
-  translation -2 -1 0
+  translation 0.0 0.0 0
   name "TurtleBot3Burger_1"
   controller "<extern>"
   lidarSlot [
     LDS-01 {
-      name "LDS_01_tb1"
+      name "LDS-01"
     }
   ]
-  extensionSlot [
-  ]
 }
+# Robot 2: +X
 TurtleBot3Burger {
-  translation 0 0 0
+  translation 1.5 0.0 0
   name "TurtleBot3Burger_2"
   controller "<extern>"
   lidarSlot [
     LDS-01 {
-      name "LDS_01_tb2"
+      name "LDS-01"
     }
   ]
-  extensionSlot [
-  ]
 }
+# Robot 3: -X
 TurtleBot3Burger {
-  translation 2 1 0
+  translation -1.5 0.0 0
   name "TurtleBot3Burger_3"
   controller "<extern>"
   lidarSlot [
     LDS-01 {
-      name "LDS_01_tb3"
+      name "LDS-01"
     }
   ]
-  extensionSlot [
+}
+# Robot 4: +Y
+TurtleBot3Burger {
+  translation 0.0 1.5 0
+  name "TurtleBot3Burger_4"
+  controller "<extern>"
+  lidarSlot [
+    LDS-01 {
+      name "LDS-01"
+    }
+  ]
+}
+# Robot 5: -Y
+TurtleBot3Burger {
+  translation 0.0 -1.5 0
+  name "TurtleBot3Burger_5"
+  controller "<extern>"
+  lidarSlot [
+    LDS-01 {
+      name "LDS-01"
+    }
+  ]
+}
+# Robot 6: +X +Y
+TurtleBot3Burger {
+  translation 1.5 1.5 0
+  name "TurtleBot3Burger_6"
+  controller "<extern>"
+  lidarSlot [
+    LDS-01 {
+      name "LDS-01"
+    }
+  ]
+}
+# Robot 7: -X -Y
+TurtleBot3Burger {
+  translation -1.5 -1.5 0
+  name "TurtleBot3Burger_7"
+  controller "<extern>"
+  lidarSlot [
+    LDS-01 {
+      name "LDS-01"
+    }
+  ]
+}
+# Robot 8: +X -Y
+TurtleBot3Burger {
+  translation 1.5 -1.5 0
+  name "TurtleBot3Burger_8"
+  controller "<extern>"
+  lidarSlot [
+    LDS-01 {
+      name "LDS-01"
+    }
+  ]
+}
+# Robot 9: -X +Y
+TurtleBot3Burger {
+  translation -1.5 1.5 0
+  name "TurtleBot3Burger_9"
+  controller "<extern>"
+  lidarSlot [
+    LDS-01 {
+      name "LDS-01"
+    }
+  ]
+}
+# Robot 10: +2X
+TurtleBot3Burger {
+  translation 3.0 0.0 0
+  name "TurtleBot3Burger_10"
+  controller "<extern>"
+  lidarSlot [
+    LDS-01 {
+      name "LDS-01"
+    }
   ]
 }
