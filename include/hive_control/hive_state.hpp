@@ -26,6 +26,7 @@
 
 #include "geometry_msgs/msg/twist.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
+#include "nav_msgs/msg/occupancy_grid.hpp"
 
 namespace hive_control
 {
@@ -53,9 +54,10 @@ public:
 
   /**
    * @brief Get velocity command for current state
+   * @param context Pointer to HIVE controller context (for accessing latest scan)
    * @return Twist message with velocity commands
    */
-  virtual geometry_msgs::msg::Twist getVelocityCommand() = 0;
+  virtual geometry_msgs::msg::Twist getVelocityCommand(HiveController * context = nullptr) = 0;
 
   /**
    * @brief Get name of current state (for debugging)
@@ -75,7 +77,7 @@ public:
     HiveController * context,
     const sensor_msgs::msg::LaserScan::SharedPtr & scan) override;
 
-  geometry_msgs::msg::Twist getVelocityCommand() override;
+  geometry_msgs::msg::Twist getVelocityCommand(HiveController * context = nullptr) override;
 
   std::string getStateName() const override {return "IDLE";}
 };
@@ -92,7 +94,7 @@ public:
     HiveController * context,
     const sensor_msgs::msg::LaserScan::SharedPtr & scan) override;
 
-  geometry_msgs::msg::Twist getVelocityCommand() override;
+  geometry_msgs::msg::Twist getVelocityCommand(HiveController * context = nullptr) override;
 
   std::string getStateName() const override {return "SEARCH";}
 
@@ -100,10 +102,35 @@ private:
   bool isObstacleDetected(const sensor_msgs::msg::LaserScan::SharedPtr & scan);
   bool needsCoordination() const;
   
+  /**
+   * @brief Find frontier direction from map data (for better exploration)
+   * @param map Occupancy grid map
+   * @param scan Laser scan (for coordinate transformation)
+   * @param frontier_angle Output: angle to turn toward frontier (in radians)
+   * @return true if frontier found, false otherwise
+   */
+  bool findFrontierDirection(
+    const nav_msgs::msg::OccupancyGrid::SharedPtr & map,
+    const sensor_msgs::msg::LaserScan::SharedPtr & scan,
+    double & frontier_angle);
+  
   int search_duration_counter_ = 0;
   const double obstacle_distance_ = 0.5;
-  const double linear_velocity_ = 0.1;
-  static constexpr int MAX_SEARCH_TIME = 100;
+  const double linear_velocity_ = 0.3;  // Forward velocity when path is clear
+  // Removed MAX_SEARCH_TIME - robot should stay in SEARCH until mapping is complete
+  
+  // Randomization for turn direction to prevent "lemming effect"
+  int turn_direction_persistence_ = 0;  // How many cycles to persist current turn direction
+  int current_turn_direction_ = 0;     // 0 = left/positive, 1 = right/negative
+  
+  // Turn duration tracking for aggressive scattering (counter-based, ~10Hz = 100ms per cycle)
+  int turn_remaining_cycles_ = 0;  // How many cycles to keep turning (10-20 cycles = 1.0-2.0 seconds)
+  bool is_turning_ = false;        // Whether robot is currently in a turn maneuver
+  
+  // Stuck detection - track if robot hasn't made progress
+  int stuck_counter_ = 0;  // Counts how long robot has been in same area
+  double last_min_distance_ = 0.0;  // Last minimum distance to obstacles
+  static constexpr int STUCK_THRESHOLD = 50;  // If stuck for 50 cycles (~5 seconds), force recovery
 };
 
 /**
@@ -118,7 +145,7 @@ public:
     HiveController * context,
     const sensor_msgs::msg::LaserScan::SharedPtr & scan) override;
 
-  geometry_msgs::msg::Twist getVelocityCommand() override;
+  geometry_msgs::msg::Twist getVelocityCommand(HiveController * context = nullptr) override;
 
   std::string getStateName() const override {return "COORDINATION";}
 
@@ -144,7 +171,7 @@ public:
     HiveController * context,
     const sensor_msgs::msg::LaserScan::SharedPtr & scan) override;
 
-  geometry_msgs::msg::Twist getVelocityCommand() override;
+  geometry_msgs::msg::Twist getVelocityCommand(HiveController * context = nullptr) override;
 
   std::string getStateName() const override {return "CONVERGENCE";}
 
