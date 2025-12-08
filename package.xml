@@ -24,12 +24,14 @@
   
   <!-- SLAM dependencies -->
   <depend>slam_toolbox</depend>
-  <depend>multirobot_map_merge</depend>
+  <!-- multirobot_map_merge: Not available as binary package, needs to be built from source -->
+  <!-- <depend>multirobot_map_merge</depend> -->
   
   <!-- Simulation dependencies -->
   <depend>webots_ros2</depend>
   <depend>robot_state_publisher</depend>
   <depend>joint_state_publisher</depend>
+  <depend>controller_manager_msgs</depend>
   
   <!-- Visualization dependencies -->
   <depend>rviz2</depend>

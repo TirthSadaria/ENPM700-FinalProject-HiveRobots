@@ -1,0 +1,36 @@
+# Build artifacts
+build/
+install/
+log/
+
+# Generated results (maps, images)
+results/
+results/*.pgm
+results/*.yaml
+results/*.png
+results/*.pdf
+# But allow YAML config files
+!config/*.yaml
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log

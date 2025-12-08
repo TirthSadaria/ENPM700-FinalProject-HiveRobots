@@ -59,6 +59,19 @@ ament_target_dependencies(hive_controller_node
 )
 
 # ------------------------------------------------------------------------------
+# Executable: Scan frame remapper for SLAM compatibility
+# ------------------------------------------------------------------------------
+
+add_executable(scan_frame_remapper
+  src/scan_frame_remapper.cpp
+)
+
+ament_target_dependencies(scan_frame_remapper
+  rclcpp
+  sensor_msgs
+)
+
+# ------------------------------------------------------------------------------
 # Install targets and headers so ros2 run can find the node
 # ------------------------------------------------------------------------------
 
@@ -66,6 +79,7 @@ install(
   TARGETS
     hive_core
     hive_controller_node
+    scan_frame_remapper
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
@@ -81,6 +95,13 @@ install(DIRECTORY
   worlds  
   config
   DESTINATION share/${PROJECT_NAME}/
+)
+
+install(PROGRAMS
+  scripts/generate_world.py
+  scripts/source_all_workspaces.sh
+  scripts/verify_robot_publishing.sh
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 # ------------------------------------------------------------------------------
