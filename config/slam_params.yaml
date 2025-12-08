@@ -1,0 +1,79 @@
+# SLAM Toolbox Configuration for Multi-Robot System
+# Generic configuration - frame names will be overridden per robot in launch file
+# Mode: mapping (online_async for real-time mapping)
+
+slam_toolbox:
+  ros__parameters:
+    # Mode: mapping (online_async)
+    mode: mapping
+    solver_plugin: solver_plugins::CeresSolver
+    ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
+    ceres_preconditioner: SCHUR_JACOBI
+    ceres_trust_strategy: LEVENBERG_MARQUARDT
+    ceres_dogleg_type: TRADITIONAL_DOGLEG
+    ceres_loss_function: None
+
+    # Frame names (will be overridden per robot in launch file)
+    odom_frame: odom
+    map_frame: map
+    base_frame: base_link
+    
+    # Scan topic (will be remapped per robot)
+    scan_topic: /scan
+    
+    # Use simulation time
+    use_sim_time: true
+    
+    # Performance optimization for simulation
+    map_update_interval: 0.5  # Update map every 0.5 seconds (faster updates = sharper maps, but may cause queue overflow)
+    max_laser_range: 3.5       # Maximum range for laser scans (meters) - matches TurtleBot3 LDS-01 (3.5m)
+    minimum_laser_range: 0.1   # Minimum range for laser scans (matches LDS-01)
+    transform_timeout: 2.0      # Increased timeout to 2.0 for better reliability and to prevent queue overflow
+    
+    # Map resolution - Balanced for quality and performance
+    # IMPORTANT: All robots must use the SAME resolution for map merging to work
+    # Higher resolution = sharper maps but more computation
+    resolution: 0.03  # 3cm resolution (sharper maps - increased from 0.05 for better quality)
+    # Note: 0.03m = 3cm provides much sharper maps than 0.05m = 5cm
+    
+    # Map size - Larger for better coverage and consistent merging
+    # IMPORTANT: All robots should start with the SAME map size for proper merging
+    map_start_size: 1000  # Start with 1000x1000 cells (large enough for warehouse, consistent across robots)
+    
+    # Scan matcher parameters - Improved for better matching
+    scan_buffer_size: 30  # Increased buffer for better matching (more scan history)
+    scan_buffer_maximum_scan_distance: 2.0  # Increased from 1.0
+    link_match_minimum_response: 0.4  # Increased from 0.1 for better quality matches (stricter matching)
+    link_scan_maximum_distance: 2.0  # Increased from 1.5
+    loop_search_maximum_distance: 5.0  # Increased from 3.0 for better loop closure
+    distance_variance_penalty: 0.3  # Reduced from 0.5 for less penalty
+    angle_variance_penalty: 0.5  # Reduced from 1.0 for less penalty
+    fine_search_angle_offset: 0.001745  # Finer search (reduced from 0.00349)
+    coarse_search_angle_offset: 0.1745  # Reduced from 0.349
+    coarse_angle_resolution: 0.01745  # Finer resolution (reduced from 0.0349)
+    minimum_angle_penalty: 0.95  # Increased from 0.9
+    minimum_distance_penalty: 0.7  # Increased from 0.5
+    use_response_expansion: true
+    
+    # Loop closure parameters - Improved for better loop detection
+    loop_search_space_dimension: 1.0  # Increased from 0.5 for better loop closure
+    
+    # Optimization parameters - Improved for better map quality
+    correlation_search_space_dimension: 1.0  # Increased from 0.5
+    correlation_search_space_resolution: 0.005  # Finer resolution (reduced from 0.01)
+    correlation_search_space_smear_deviation: 0.02  # Reduced from 0.03 for maximum sharpness (was 0.1)
+    
+    # Additional parameters for sharper maps
+    scan_queue_size: 10  # Process more scans for better quality
+    map_publish_rate: 1.0  # Publish map at 1Hz (faster = more responsive but more CPU)
+    scan_matcher_type: "scan_matcher"  # Use scan matcher for better alignment
+    
+    # Restart parameters
+    restart_time: 0.0
+    restart_time_std: 0.0
+    restart_time_bump: 0.0
+    restart_time_bump_std: 0.0
+    
+    # Debug
+    debug_logging: false
+

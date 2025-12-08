@@ -26,6 +26,7 @@
 
 #include "geometry_msgs/msg/twist.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
+#include "nav_msgs/msg/occupancy_grid.hpp"
 
 namespace hive_control
 {
@@ -56,8 +57,9 @@ class HiveController
 public:
   /**
    * @brief Constructor - initializes in IDLE state
+   * @param namespace_str ROS2 namespace (e.g., "/tb1" or "tb1") to extract robot ID
    */
-  HiveController();
+  explicit HiveController(const std::string & namespace_str = "");
 
   /**
    * @brief Process laser scan and update state (main update entrypoint)
@@ -109,11 +111,31 @@ public:
    */
   StateID getCurrentStateId() const {return current_state_id_;}
 
+  /**
+   * @brief Get the latest laser scan data
+   * @return Shared pointer to latest scan, or nullptr if no scan received yet
+   */
+  sensor_msgs::msg::LaserScan::SharedPtr getCurrentScan() const {return latest_scan_;}
+
+  /**
+   * @brief Set the latest map data (for frontier exploration)
+   * @param map Shared pointer to latest map
+   */
+  void setCurrentMap(const nav_msgs::msg::OccupancyGrid::SharedPtr & map) {latest_map_ = map;}
+
+  /**
+   * @brief Get the latest map data
+   * @return Shared pointer to latest map, or nullptr if no map received yet
+   */
+  nav_msgs::msg::OccupancyGrid::SharedPtr getCurrentMap() const {return latest_map_;}
+
 private:
   std::shared_ptr<HiveState> current_state_;  ///< Current concrete state
   bool clockwise_;                            ///< Rotation direction flag
   double battery_level_;                      ///< Simulated battery level
   StateID current_state_id_;                  ///< High-level state label
+  sensor_msgs::msg::LaserScan::SharedPtr latest_scan_;  ///< Latest laser scan data
+  nav_msgs::msg::OccupancyGrid::SharedPtr latest_map_;  ///< Latest map data (for frontier exploration)
 };
 
 }  // namespace hive_control
