@@ -5,11 +5,15 @@
             <ros>
                 <enabled>true</enabled>
                 <updateRate>5</updateRate>
+                <!-- Use absolute topic name - driver publishes to /scan globally -->
+                <!-- Launch file will remap this to namespaced version -->
                 <topicName>/scan</topicName>
                 <alwaysOn>false</alwaysOn>
                 <frameName>LDS-01</frameName>
             </ros>
         </device>
+
+        <!-- IMU plugin removed - not needed for 2D SLAM and warehouse world doesn't have IMU -->
 
         <plugin type="webots_ros2_control::Ros2Control" />
 
