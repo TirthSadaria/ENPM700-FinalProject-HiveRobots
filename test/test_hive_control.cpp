@@ -184,6 +184,231 @@ TEST_F(HiveControlTest, ObstacleDetectionThresholds) {
 }
 
 // =============================================================================
+// TEST 6: State Name Retrieval
+// =============================================================================
+/**
+ * @brief Test getCurrentStateName returns correct state names
+ */
+TEST_F(HiveControlTest, StateNameRetrieval) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Initial state should be SEARCH (which maps to EXPLORING)
+  EXPECT_EQ(controller->getCurrentStateName(), "SEARCH");
+  
+  // Test state name is not empty
+  EXPECT_FALSE(controller->getCurrentStateName().empty());
+}
+
+// =============================================================================
+// TEST 7: Process Laser Scan
+// =============================================================================
+/**
+ * @brief Test processLaserScan stores scan and updates state
+ */
+TEST_F(HiveControlTest, ProcessLaserScan) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Create a valid laser scan
+  auto scan = std::make_shared<sensor_msgs::msg::LaserScan>();
+  scan->header.stamp = rclcpp::Clock().now();
+  scan->header.frame_id = "LDS-01";
+  scan->angle_min = -M_PI;
+  scan->angle_max = M_PI;
+  scan->angle_increment = 0.0175;
+  scan->range_min = 0.1;
+  scan->range_max = 3.5;
+  scan->ranges = std::vector<float>(360, 1.5);  // 360 readings at 1.5m
+  
+  // Process the scan
+  controller->processLaserScan(scan);
+  
+  // Verify scan was stored
+  auto stored_scan = controller->getCurrentScan();
+  ASSERT_NE(stored_scan, nullptr);
+  EXPECT_EQ(stored_scan->ranges.size(), 360);
+}
+
+// =============================================================================
+// TEST 8: Get Velocity Command
+// =============================================================================
+/**
+ * @brief Test getVelocityCommand returns valid twist messages
+ */
+TEST_F(HiveControlTest, GetVelocityCommand) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Get velocity command (should work even without scan)
+  auto cmd = controller->getVelocityCommand();
+  
+  // Verify it's a valid Twist message (values may be zero)
+  EXPECT_GE(cmd.linear.x, -1.0);
+  EXPECT_LE(cmd.linear.x, 1.0);
+  EXPECT_GE(cmd.angular.z, -2.0);
+  EXPECT_LE(cmd.angular.z, 2.0);
+}
+
+// =============================================================================
+// TEST 9: Map Management
+// =============================================================================
+/**
+ * @brief Test map setter and getter
+ */
+TEST_F(HiveControlTest, MapManagement) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Initially no map
+  EXPECT_EQ(controller->getCurrentMap(), nullptr);
+  
+  // Create a test map
+  auto map = std::make_shared<nav_msgs::msg::OccupancyGrid>();
+  map->header.stamp = rclcpp::Clock().now();
+  map->header.frame_id = "map";
+  map->info.width = 100;
+  map->info.height = 100;
+  map->info.resolution = 0.05;
+  map->data = std::vector<int8_t>(10000, 0);
+  
+  // Set the map
+  controller->setCurrentMap(map);
+  
+  // Verify map was stored
+  auto stored_map = controller->getCurrentMap();
+  ASSERT_NE(stored_map, nullptr);
+  EXPECT_EQ(stored_map->info.width, 100);
+  EXPECT_EQ(stored_map->info.height, 100);
+}
+
+// =============================================================================
+// TEST 10: State Transitions
+// =============================================================================
+/**
+ * @brief Test setState changes the current state
+ */
+TEST_F(HiveControlTest, StateTransitions) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Initial state should be SEARCH
+  EXPECT_EQ(controller->getCurrentStateName(), "SEARCH");
+  
+  // Transition to IDLE state
+  auto idle_state = std::make_shared<hive_control::IdleState>();
+  controller->setState(idle_state);
+  
+  // Verify state changed
+  EXPECT_EQ(controller->getCurrentStateName(), "IDLE");
+  
+  // Get velocity command from IDLE state (should be zero)
+  auto cmd = controller->getVelocityCommand();
+  EXPECT_DOUBLE_EQ(cmd.linear.x, 0.0);
+  EXPECT_DOUBLE_EQ(cmd.angular.z, 0.0);
+}
+
+// =============================================================================
+// TEST 11: Robot ID Parsing from Namespace
+// =============================================================================
+/**
+ * @brief Test that robot ID is correctly parsed from namespace
+ */
+TEST_F(HiveControlTest, RobotIDParsing) {
+  // Robot 1 should be clockwise (odd)
+  auto controller1 = std::make_shared<hive_control::HiveController>("tb1");
+  EXPECT_TRUE(controller1->isClockwise());
+  
+  // Robot 2 should be counterclockwise (even)
+  auto controller2 = std::make_shared<hive_control::HiveController>("tb2");
+  EXPECT_FALSE(controller2->isClockwise());
+  
+  // Robot 3 should be clockwise (odd)
+  auto controller3 = std::make_shared<hive_control::HiveController>("tb3");
+  EXPECT_TRUE(controller3->isClockwise());
+  
+  // Test with different namespace formats
+  auto controller4 = std::make_shared<hive_control::HiveController>("/tb4");
+  EXPECT_FALSE(controller4->isClockwise());
+}
+
+// =============================================================================
+// TEST 12: Empty Scan Handling
+// =============================================================================
+/**
+ * @brief Test handling of empty or invalid scans
+ */
+TEST_F(HiveControlTest, EmptyScanHandling) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Process empty scan (with valid header)
+  auto empty_scan = std::make_shared<sensor_msgs::msg::LaserScan>();
+  empty_scan->header.stamp = rclcpp::Clock().now();
+  empty_scan->header.frame_id = "LDS-01";
+  empty_scan->angle_min = -M_PI;
+  empty_scan->angle_max = M_PI;
+  empty_scan->angle_increment = 0.0175;
+  empty_scan->range_min = 0.1;
+  empty_scan->range_max = 3.5;
+  empty_scan->ranges = std::vector<float>();  // Empty ranges
+  controller->processLaserScan(empty_scan);
+  
+  // Controller should still function
+  auto cmd = controller->getVelocityCommand();
+  EXPECT_NE(controller->getCurrentStateName(), "");
+  EXPECT_TRUE(std::isfinite(cmd.linear.x));
+  EXPECT_TRUE(std::isfinite(cmd.angular.z));
+}
+
+// =============================================================================
+// TEST 13: State Classes Basic Functionality
+// =============================================================================
+/**
+ * @brief Test individual state classes return correct names
+ */
+TEST_F(HiveControlTest, StateClassesBasicFunctionality) {
+  // Test IdleState
+  auto idle = std::make_shared<hive_control::IdleState>();
+  EXPECT_EQ(idle->getStateName(), "IDLE");
+  
+  // Test SearchState
+  auto search = std::make_shared<hive_control::SearchState>();
+  EXPECT_EQ(search->getStateName(), "SEARCH");
+  
+  // Test CoordinationState
+  auto coord1 = std::make_shared<hive_control::CoordinationState>(true);
+  EXPECT_EQ(coord1->getStateName(), "COORDINATION");
+  
+  auto coord2 = std::make_shared<hive_control::CoordinationState>(false);
+  EXPECT_EQ(coord2->getStateName(), "COORDINATION");
+  
+  // Test ConvergenceState
+  auto conv = std::make_shared<hive_control::ConvergenceState>();
+  EXPECT_EQ(conv->getStateName(), "CONVERGENCE");
+}
+
+// =============================================================================
+// TEST 14: Velocity Command Edge Cases
+// =============================================================================
+/**
+ * @brief Test velocity commands with different state scenarios
+ */
+TEST_F(HiveControlTest, VelocityCommandEdgeCases) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Test with valid scan
+  auto scan = std::make_shared<sensor_msgs::msg::LaserScan>();
+  scan->angle_min = -M_PI;
+  scan->angle_max = M_PI;
+  scan->angle_increment = 0.0175;
+  scan->range_min = 0.1;
+  scan->range_max = 3.5;
+  scan->ranges = std::vector<float>(360, 2.0);  // Clear path ahead
+  
+  controller->processLaserScan(scan);
+  auto cmd = controller->getVelocityCommand();
+  
+  // Command should be valid (not NaN or Inf)
+  EXPECT_TRUE(std::isfinite(cmd.linear.x));
+  EXPECT_TRUE(std::isfinite(cmd.angular.z));
+}
+
+// =============================================================================
 // Main function
 // =============================================================================
 int main(int argc, char ** argv) {
