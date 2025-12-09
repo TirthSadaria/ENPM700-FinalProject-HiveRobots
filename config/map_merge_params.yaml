@@ -10,10 +10,10 @@ map_merge:
     discovery_rate: 1.0         # Hz - how often to discover new robots
     estimation_rate: 1.0        # Hz - pose estimation rate
     
-    # USE KNOWN POSES - more reliable since we know exact spawn coordinates
-    # Init poses are set via ExecuteProcess commands in launch file
-    known_init_poses: true
-    estimation_confidence: 1.0  # Not used when known_init_poses=true
+    # USE ESTIMATION MODE - auto-aligns maps using feature matching
+    # More robust than known_init_poses which has parameter format issues
+    known_init_poses: false
+    estimation_confidence: 0.2  # Low threshold = accept matches faster
     
     # Topic names (without namespace)
     robot_map_topic: "map"

@@ -217,25 +217,9 @@ def launch_setup(context, *args, **kwargs):
         "map_merge_params.yaml"
     )
     
-    # Build init_pose parameters dictionary for all robots
-    # map_merge expects: <robot_ns>/map_merge/init_pose_x, y, z, yaw
-    # These MUST be passed when creating the node, not after
-    init_pose_params = {}
-    for i in range(1, num_robots + 1):
-        robot_ns = f"tb{i}"
-        if i <= len(SPAWN_POSITIONS):
-            x, y, z = SPAWN_POSITIONS[i - 1]
-        else:
-            x, y, z = (0.0, 0.0, 0.0)
-        
-        # Add init_pose parameters for this robot
-        init_pose_params[f"{robot_ns}/map_merge/init_pose_x"] = float(x)
-        init_pose_params[f"{robot_ns}/map_merge/init_pose_y"] = float(y)
-        init_pose_params[f"{robot_ns}/map_merge/init_pose_z"] = float(z)
-        init_pose_params[f"{robot_ns}/map_merge/init_pose_yaw"] = 0.0
-    
-    # Map merge node with known initial poses passed at creation time
+    # Map merge node with estimation mode (auto-aligns maps)
     # Reference: https://github.com/robo-friends/m-explore-ros2
+    # Using estimation mode avoids init_pose parameter format issues
     map_merge_node = Node(
         package="multirobot_map_merge",
         executable="map_merge",
@@ -245,8 +229,9 @@ def launch_setup(context, *args, **kwargs):
             {
                 "use_sim_time": use_sim_time,
                 "merged_map_topic": "map_merged",
+                "known_init_poses": False,  # Use feature-based estimation
+                "estimation_confidence": 0.2,  # Low threshold for faster matching
             },
-            init_pose_params,  # Pass init poses directly to node
         ],
         output="screen",
         condition=IfCondition(enable_map_merge),
