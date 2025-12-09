@@ -10,8 +10,8 @@ map_merge:
     discovery_rate: 1.0         # Hz - how often to discover new robots
     estimation_rate: 1.0        # Hz - pose estimation rate
     
-    # USE KNOWN POSES - more reliable than feature estimation
-    # Robot spawn positions are known from generate_world.py
+    # USE KNOWN POSES - more reliable since we know exact spawn coordinates
+    # Init poses are set via ExecuteProcess commands in launch file
     known_init_poses: true
     estimation_confidence: 1.0  # Not used when known_init_poses=true
     
@@ -21,8 +21,8 @@ map_merge:
     merged_map_topic: "map"
     world_frame: "world"
     
-    # Empty string discovers all robot namespaces automatically
-    robot_namespace: ""
+    # Prefix to match robot namespaces (tb1, tb2, etc.)
+    robot_namespace: "tb"
     
     # ==========================================
     # Initial Poses for Each Robot
