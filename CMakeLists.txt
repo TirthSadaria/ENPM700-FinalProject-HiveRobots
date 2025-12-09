@@ -99,7 +99,6 @@ install(DIRECTORY
 
 install(PROGRAMS
   scripts/generate_world.py
-  scripts/source_all_workspaces.sh
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -119,12 +118,21 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
   
   # ------------------------------------------------------------------------------
-  # Unit Tests
+  # Unit Tests - Level 1 & Level 2
   # ------------------------------------------------------------------------------
   
-  # Unit tests removed for cleanup
-  
-  # Integration tests for launch files (removed for cleanup)
+  # Main unit test suite
+  ament_add_gtest(test_hive_control
+    test/test_hive_control.cpp
+  )
+  target_link_libraries(test_hive_control
+    hive_core
+  )
+  ament_target_dependencies(test_hive_control
+    rclcpp
+    geometry_msgs
+    sensor_msgs
+  )
   
 endif()
 
