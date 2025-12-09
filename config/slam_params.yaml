@@ -23,39 +23,40 @@ slam_toolbox:
     use_map_saver: true
 
     # ----------------------------------------------------
-    # TIMING & PERFORMANCE (Tuned to avoid queue overflow)
+    # TIMING & PERFORMANCE (Balanced for quality + stability)
+    # Reference: https://docs.ros.org/en/ros2_packages/humble/api/slam_toolbox/
     # ----------------------------------------------------
     use_sim_time: true
     debug_logging: false
-    throttle_scans: 10             # Heavily throttle to reduce queue buildup
-    transform_publish_period: 0.2  # Slower TF publish (5Hz)
-    map_update_interval: 5.0       # Slow map updates to reduce load
+    throttle_scans: 2              # Moderate throttle (process every 2nd scan)
+    transform_publish_period: 0.05 # 20Hz TF publish (default)
+    map_update_interval: 1.0       # 1 second map updates
     resolution: 0.05               # 5cm grid
 
-    # CRITICAL: Very relaxed TF settings to handle Webots timing
-    transform_timeout: 10.0        # Very generous timeout for TF lookup
-    tf_buffer_duration: 600.0      # 10 minutes of TF history
+    # TF settings for Webots simulation
+    transform_timeout: 1.0         # Standard timeout
+    tf_buffer_duration: 60.0       # 1 minute of TF history
     stack_size_to_use: 40000000    # Large stack for big maps
 
     # SENSOR DATA (Match LDS-01 lidar specs)
     min_laser_range: 0.1
     max_laser_range: 3.5
-    minimum_laser_range: 0.1  # Alias for compatibility
 
     # ----------------------------------------------------
-    # TRAVEL CONSTRAINTS (Very relaxed for Webots timing)
+    # TRAVEL CONSTRAINTS (Process frequently for better maps)
     # ----------------------------------------------------
-    minimum_time_interval: 2.0     # Only process every 2 seconds
-    minimum_travel_distance: 0.30  # Process every 30cm (reduced frequency)
-    minimum_travel_heading: 0.50   # Process every ~28° (reduced frequency)
+    minimum_time_interval: 0.5     # Process at most 2Hz
+    minimum_travel_distance: 0.10  # Process every 10cm
+    minimum_travel_heading: 0.15   # Process every ~8.5°
 
     # ----------------------------------------------------
-    # SCAN MATCHING (From friend's working config)
+    # SCAN MATCHING
+    # Reference: https://docs.ros.org/en/ros2_packages/humble/api/slam_toolbox/
     # ----------------------------------------------------
     use_scan_matching: true
     use_scan_barycenter: true
-    scan_buffer_size: 10           # Reduced to prevent queue overflow
-    scan_queue_size: 1             # Only keep latest scan (prevents old message backlog)
+    scan_buffer_size: 20           # Buffer for scan chain
+    scan_queue_size: 1             # Always 1 for async mode (per docs)
     scan_buffer_maximum_scan_distance: 10.0
     link_match_minimum_response_fine: 0.1
     link_scan_maximum_distance: 1.5
