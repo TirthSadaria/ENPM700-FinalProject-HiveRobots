@@ -78,6 +78,13 @@ public:
 private:
   void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
   {
+    // Skip empty scans
+    if (msg->ranges.empty()) {
+      RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
+                            "Received empty scan, skipping");
+      return;
+    }
+    
     // Create a copy and remap the frame_id
     auto remapped_msg = std::make_shared<sensor_msgs::msg::LaserScan>(*msg);
     remapped_msg->header.frame_id = remapped_frame_id_;
@@ -88,8 +95,14 @@ private:
     // CRITICAL FIX: Normalize scan angles for SLAM compatibility
     // Webots lidar outputs: angle_min=π, angle_max=-π, angle_increment=-0.017 (inverted)
     // SLAM expects: angle_min=-π, angle_max=π, angle_increment=+0.017 (standard)
-    // Fix: Reverse the ranges array and swap angle_min/max
-    if (remapped_msg->angle_increment < 0) {
+    // 
+    // SLAM toolbox calculates expected_count = (angle_max - angle_min) / angle_increment
+    // If angle_increment is negative, this gives a negative number which overflows to ~4 billion
+    // So we MUST ensure angle_increment is positive!
+    
+    bool needs_reversal = (remapped_msg->angle_increment < 0);
+    
+    if (needs_reversal) {
       // Reverse the ranges array
       std::reverse(remapped_msg->ranges.begin(), remapped_msg->ranges.end());
       
@@ -98,11 +111,43 @@ private:
         std::reverse(remapped_msg->intensities.begin(), remapped_msg->intensities.end());
       }
       
-      // Swap angle_min and angle_max (don't negate, just swap!)
-      // Original: angle_min=3.14, angle_max=-3.14, increment=-0.017
-      // After swap: angle_min=-3.14, angle_max=3.14, increment=+0.017
+      // Swap angle_min and angle_max
       std::swap(remapped_msg->angle_min, remapped_msg->angle_max);
-      remapped_msg->angle_increment = -remapped_msg->angle_increment;
+      
+      // Make increment positive
+      remapped_msg->angle_increment = std::abs(remapped_msg->angle_increment);
+    }
+    
+    // ADDITIONAL SAFETY: Ensure angle conventions are correct
+    // Standard convention: angle_min < angle_max with positive increment
+    if (remapped_msg->angle_min > remapped_msg->angle_max) {
+      std::swap(remapped_msg->angle_min, remapped_msg->angle_max);
+      if (!needs_reversal) {
+        // If we didn't reverse before, reverse now
+        std::reverse(remapped_msg->ranges.begin(), remapped_msg->ranges.end());
+        if (!remapped_msg->intensities.empty()) {
+          std::reverse(remapped_msg->intensities.begin(), remapped_msg->intensities.end());
+        }
+      }
+    }
+    
+    // Ensure increment is always positive
+    remapped_msg->angle_increment = std::abs(remapped_msg->angle_increment);
+    
+    // Validate the scan before publishing
+    size_t expected_count = static_cast<size_t>(
+      std::round((remapped_msg->angle_max - remapped_msg->angle_min) / remapped_msg->angle_increment) + 1
+    );
+    
+    // Log first scan for debugging
+    static bool first_scan = true;
+    if (first_scan) {
+      RCLCPP_INFO(this->get_logger(), 
+                  "First remapped scan: angle_min=%.3f, angle_max=%.3f, increment=%.4f, "
+                  "ranges=%zu, expected=%zu",
+                  remapped_msg->angle_min, remapped_msg->angle_max, 
+                  remapped_msg->angle_increment, remapped_msg->ranges.size(), expected_count);
+      first_scan = false;
     }
     
     // Publish the remapped message

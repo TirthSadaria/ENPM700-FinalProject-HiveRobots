@@ -165,7 +165,22 @@ def launch_setup(context, *args, **kwargs):
         original_params = yaml.safe_load(f)
 
     def create_namespaced_params_file(namespace: str) -> str:
-        namespaced_params = {namespace: original_params}
+        # Deep copy the original params
+        import copy
+        params = copy.deepcopy(original_params)
+        
+        # CRITICAL FIX: Set frame IDs WITHOUT namespace prefix
+        # The diffdrive_controller already runs in the namespace, so it will 
+        # automatically add the namespace prefix to frame names.
+        # Using "odom" will become "tb1/odom" when running in tb1 namespace.
+        if "diffdrive_controller" in params:
+            if "ros__parameters" not in params["diffdrive_controller"]:
+                params["diffdrive_controller"]["ros__parameters"] = {}
+            params["diffdrive_controller"]["ros__parameters"]["odom_frame_id"] = "odom"
+            params["diffdrive_controller"]["ros__parameters"]["base_frame_id"] = "base_link"
+            params["diffdrive_controller"]["ros__parameters"]["publish_odom_tf"] = True
+        
+        namespaced_params = {namespace: params}
         temp_file = tempfile.NamedTemporaryFile(
             mode="w", delete=False, suffix=".yml"
         )
@@ -405,15 +420,18 @@ def launch_setup(context, *args, **kwargs):
     # This establishes the world frame and map frame relationships
     
     # Delay spawners (let Webots controllers initialize first)
+    # Controller spawners set up diff_drive_controller which publishes odom TF
     delayed_spawners = TimerAction(
         period=10.0,
         actions=all_spawners
     )
 
-    # Delay SLAM launch (after transforms are established)
-    # CRITICAL FIX 3: SLAM needs transforms to be ready
+    # Delay SLAM launch significantly (after TF tree is fully established)
+    # CRITICAL: SLAM needs odom->base_link TF from diff_drive_controller
+    # diff_drive_controller starts ~5 seconds after spawners
+    # So we need to wait: 10s (spawners) + 5s (controller init) + 10s (buffer) = 25s
     delayed_slam = TimerAction(
-        period=15.0,
+        period=25.0,  # Increased from 15s to 25s for TF stability
         actions=slam_nodes,
         condition=IfCondition(enable_slam),
     )
@@ -428,8 +446,9 @@ def launch_setup(context, *args, **kwargs):
         condition=IfCondition(enable_map_merge),
     )
     
+    # Map merge starts after SLAM has had time to generate initial maps
     delayed_map_merge = TimerAction(
-        period=20.0,
+        period=35.0,  # Increased from 20s to 35s (10s after SLAM starts)
         actions=[map_merge_node],
         condition=IfCondition(enable_map_merge),
     )

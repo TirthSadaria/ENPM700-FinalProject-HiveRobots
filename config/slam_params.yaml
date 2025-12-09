@@ -23,18 +23,18 @@ slam_toolbox:
     use_map_saver: true
 
     # ----------------------------------------------------
-    # TIMING & PERFORMANCE (From friend's working config)
+    # TIMING & PERFORMANCE (Tuned to avoid queue overflow)
     # ----------------------------------------------------
     use_sim_time: true
     debug_logging: false
-    throttle_scans: 5              # Heavily throttle to reduce CPU load
-    transform_publish_period: 0.1  # Slower TF publish (10Hz)
-    map_update_interval: 3.0       # Slow map updates to reduce load
+    throttle_scans: 10             # Heavily throttle to reduce queue buildup
+    transform_publish_period: 0.2  # Slower TF publish (5Hz)
+    map_update_interval: 5.0       # Slow map updates to reduce load
     resolution: 0.05               # 5cm grid
 
-    # CRITICAL: Relaxed TF settings to handle Webots timing issues
-    transform_timeout: 5.0         # Very generous timeout for TF lookup
-    tf_buffer_duration: 300.0      # 5 minutes of TF history
+    # CRITICAL: Very relaxed TF settings to handle Webots timing
+    transform_timeout: 10.0        # Very generous timeout for TF lookup
+    tf_buffer_duration: 600.0      # 10 minutes of TF history
     stack_size_to_use: 40000000    # Large stack for big maps
 
     # SENSOR DATA (Match LDS-01 lidar specs)
@@ -43,11 +43,11 @@ slam_toolbox:
     minimum_laser_range: 0.1  # Alias for compatibility
 
     # ----------------------------------------------------
-    # TRAVEL CONSTRAINTS (Relaxed for Webots timing)
+    # TRAVEL CONSTRAINTS (Very relaxed for Webots timing)
     # ----------------------------------------------------
-    minimum_time_interval: 1.0     # Only process every 1 second
-    minimum_travel_distance: 0.20  # Process every 20cm (reduced frequency)
-    minimum_travel_heading: 0.30   # Process every ~17° (reduced frequency)
+    minimum_time_interval: 2.0     # Only process every 2 seconds
+    minimum_travel_distance: 0.30  # Process every 30cm (reduced frequency)
+    minimum_travel_heading: 0.50   # Process every ~28° (reduced frequency)
 
     # ----------------------------------------------------
     # SCAN MATCHING (From friend's working config)
