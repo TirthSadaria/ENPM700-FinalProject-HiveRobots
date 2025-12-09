@@ -18,6 +18,7 @@
  */
 #include "hive_control/hive_state.hpp"
 #include "hive_control/hive_controller.hpp"
+#include "rclcpp/rclcpp.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include <algorithm>
 #include <cmath>
@@ -114,18 +115,8 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
     // This helps robots explore unmapped areas instead of getting stuck
     has_frontier = findFrontierDirection(map, scan, frontier_angle);
     
-    // Debug: Log frontier detection (only occasionally to avoid spam)
-    static int frontier_check_count = 0;
-    frontier_check_count++;
-    if (frontier_check_count % 100 == 0) {  // Log every 100th check
-      // Count unknown cells for debugging
-      int unknown_count = 0;
-      for (int8_t cell : map->data) {
-        if (cell == -1) unknown_count++;
-      }
-      // Note: We can't easily log from here without access to logger
-      // But this helps us understand if map is being used
-    }
+    // Frontier detection is performed via findFrontierDirection()
+    // This helps robots explore unmapped areas instead of revisiting known regions
   }
   
   // Find the best direction to move (frontier-based exploration)
@@ -143,7 +134,7 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
     return cmd;
   }
   
-  // Count valid ranges for debugging
+  // Count valid ranges to determine scan quality
   size_t valid_ranges = 0;
   double min_valid_range = scan->range_max;
   double max_valid_range = 0.0;
@@ -181,8 +172,8 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
   const double obstacle_threshold = 0.8;  // 80cm - obstacle ahead (turn before hitting)
   const double safe_distance = 1.2;  // 1.2m - preferred distance from walls
   
-  // FIX: Stuck detection - if robot hasn't moved much, force recovery
-  const double stuck_distance_threshold = 0.1;  // 10cm - if min_distance hasn't changed much, we're stuck
+  // Stuck detection: monitor if robot hasn't moved significantly
+  const double stuck_distance_threshold = 0.1;  // 10cm threshold for detecting lack of movement
   if (std::abs(min_distance - last_min_distance_) < stuck_distance_threshold) {
     stuck_counter_++;
   } else {
@@ -193,6 +184,18 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
   // If stuck for too long, force aggressive recovery
   if (stuck_counter_ > STUCK_THRESHOLD) {
     stuck_counter_ = 0;  // Reset counter
+    stuck_recovery_count_++;  // Track how many times we've tried to recover
+    
+    // If we've tried multiple recoveries without success, enter SUPER STUCK mode
+    if (stuck_recovery_count_ >= SUPER_STUCK_THRESHOLD) {
+      in_super_stuck_recovery_ = true;
+      super_stuck_phase_ = 0;  // Start with spin
+      super_stuck_cycles_ = 60;  // ~6 seconds per phase
+      stuck_recovery_count_ = 0;  // Reset for next time
+      RCLCPP_WARN(rclcpp::get_logger("SearchState"), 
+                  "SUPER STUCK! Starting aggressive exploration recovery.");
+    }
+    
     // Force a long turn maneuver to escape
     is_turning_ = true;
     turn_remaining_cycles_ = 30;  // 3 seconds of turning
@@ -202,8 +205,47 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
     return cmd;
   }
   
-  // If too close to wall, back up and turn more aggressively
-  // FIX: Add randomized back-up and turn to prevent bunching
+  // SUPER STUCK recovery - aggressive exploration pattern
+  if (in_super_stuck_recovery_) {
+    super_stuck_cycles_--;
+    
+    if (super_stuck_cycles_ <= 0) {
+      // Move to next phase
+      super_stuck_phase_++;
+      super_stuck_cycles_ = 60;  // Reset cycles for next phase
+      
+      if (super_stuck_phase_ > 2) {
+        // Finished all phases, exit super stuck mode
+        in_super_stuck_recovery_ = false;
+        super_stuck_phase_ = 0;
+        RCLCPP_INFO(rclcpp::get_logger("SearchState"), 
+                    "Super stuck recovery complete - resuming normal exploration.");
+      }
+    }
+    
+    // Execute current phase
+    switch (super_stuck_phase_) {
+      case 0:  // Phase 0: Spin 360° to scan surroundings
+        cmd.linear.x = 0.0;
+        cmd.angular.z = 0.35;  // Full spin
+        break;
+      case 1:  // Phase 1: Move forward in new direction
+        cmd.linear.x = 0.15;  // Forward
+        cmd.angular.z = 0.0;
+        break;
+      case 2:  // Phase 2: Turn to random direction and move
+        cmd.linear.x = 0.1;
+        cmd.angular.z = (current_turn_direction_ == 0) ? 0.2 : -0.2;
+        break;
+      default:
+        in_super_stuck_recovery_ = false;
+        break;
+    }
+    return cmd;
+  }
+  
+  // If too close to wall, back up and turn toward clear direction
+  // Uses randomized turn direction to prevent multiple robots from bunching together
   if (min_distance < too_close_threshold) {
     cmd.linear.x = -0.1;  // Back up (reduced to prevent maxVelocity overflow)
     // Find direction with most clearance
@@ -219,7 +261,7 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
       }
     }
     // Turn toward the direction with most clearance
-    // FIX: Add randomization to prevent all robots from turning the same way
+    // Randomization prevents all robots from turning the same direction simultaneously
     double escape_angle = angle_min + best_escape_idx * angle_increment;
     
     // If escape angle is ambiguous (near 0), use random direction
@@ -267,7 +309,7 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
     min_ahead_distance = safe_distance;  // Assume safe distance
   }
   
-  // FIX: Check if we're in the middle of a turn maneuver (aggressive scattering)
+  // Check if we're in the middle of a turn maneuver (aggressive scattering)
   if (is_turning_ && turn_remaining_cycles_ > 0) {
     // Continue turning for the remaining duration
     turn_remaining_cycles_--;
@@ -298,7 +340,7 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
         cmd.linear.x = 0.05;  // Slow forward while turning
       } else {
         // Best direction is forward but obstacle there - turn away
-        // FIX: Start aggressive turn maneuver (1.0-2.0 seconds) for better scattering
+        // Start aggressive turn maneuver (1.0-2.0 seconds) for better scattering
         if (turn_direction_persistence_ <= 0) {
           // Time to pick a new random direction
           current_turn_direction_ = turn_direction_dist(gen);
@@ -576,7 +618,7 @@ void ConvergenceState::handle(
   }
 }
 
-geometry_msgs::msg::Twist ConvergenceState::getVelocityCommand(HiveController * context)
+geometry_msgs::msg::Twist ConvergenceState::getVelocityCommand(HiveController * /* context */)
 {
   geometry_msgs::msg::Twist cmd;
   

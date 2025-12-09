@@ -63,9 +63,6 @@ HiveController::HiveController(const std::string & namespace_str)
   // Use the ID to determine behavior
   // Robot 1: clockwise (true), Robot 2: counterclockwise (false), Robot 3: clockwise (true)...
   clockwise_ = (robot_id % 2 != 0);
-  
-  // Note: Logging would require ROS2 node, so we skip it here
-  // The node can log the robot ID if needed
 }
 
 void HiveController::processLaserScan(
@@ -74,8 +71,8 @@ void HiveController::processLaserScan(
   // Store the latest scan for state classes to access
   latest_scan_ = scan;
   
-  // RESCUE MISSION FIX: Force motion if robot is IDLE but has valid scan
-  // This prevents robots from getting stuck in IDLE state
+  // Force motion if robot is IDLE but has valid scan
+  // This prevents robots from getting stuck in IDLE state when scan data is available
   if (current_state_id_ == StateID::IDLE && scan && !scan->ranges.empty()) {
     // Check if scan has valid data
     bool has_valid_data = false;
@@ -88,14 +85,9 @@ void HiveController::processLaserScan(
     
     // Force transition to SEARCH state if we have valid scan data
     if (has_valid_data) {
-      // Forward declare SearchState - it's defined in hive_state.hpp which is included
-      // We need to include it or use the factory pattern, but for now we'll use a workaround
-      // Actually, SearchState is in hive_state.hpp which should be included
-      // Let's check if we can create it directly
+      // Transition to SEARCH state to begin exploration
       current_state_ = std::make_shared<SearchState>();
       current_state_id_ = StateID::EXPLORING;
-      // Note: Logging would require ROS2 node, so we skip it here
-      // The node will log the state change automatically
     }
   }
   

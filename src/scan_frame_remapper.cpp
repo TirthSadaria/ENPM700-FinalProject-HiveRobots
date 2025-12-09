@@ -14,7 +14,13 @@
 
 /**
  * @file scan_frame_remapper.cpp
- * @brief Remaps laser scan frame_id from LDS-01 to {namespace}/LDS-01 for SLAM compatibility
+ * @brief Remaps laser scan frame_id and corrects angle orientation for SLAM compatibility
+ * 
+ * This node performs two critical functions:
+ * 1. Frame ID remapping: Changes LDS-01 to {namespace}/LDS-01 for multi-robot SLAM
+ * 2. Angle normalization: Corrects Webots inverted lidar angles to standard ROS format
+ * 
+ * @author Shreya Kalyanaraman, Tirth Sadaria
  */
 
 #include <memory>
@@ -89,16 +95,16 @@ private:
     auto remapped_msg = std::make_shared<sensor_msgs::msg::LaserScan>(*msg);
     remapped_msg->header.frame_id = remapped_frame_id_;
     
-    // CRITICAL FIX: Use current node time instead of original scan timestamp
+    // Use current node time to ensure timestamp synchronization with TF
     remapped_msg->header.stamp = this->now();
     
-    // CRITICAL FIX: Normalize scan angles for SLAM compatibility
+    // Normalize scan angles for SLAM compatibility
     // Webots lidar outputs: angle_min=π, angle_max=-π, angle_increment=-0.017 (inverted)
     // SLAM expects: angle_min=-π, angle_max=π, angle_increment=+0.017 (standard)
     // 
     // SLAM toolbox calculates expected_count = (angle_max - angle_min) / angle_increment
-    // If angle_increment is negative, this gives a negative number which overflows to ~4 billion
-    // So we MUST ensure angle_increment is positive!
+    // If angle_increment is negative, this causes integer overflow
+    // Therefore, we ensure angle_increment is always positive
     
     bool needs_reversal = (remapped_msg->angle_increment < 0);
     
@@ -118,8 +124,8 @@ private:
       remapped_msg->angle_increment = std::abs(remapped_msg->angle_increment);
     }
     
-    // ADDITIONAL SAFETY: Ensure angle conventions are correct
-    // Standard convention: angle_min < angle_max with positive increment
+    // Additional safety check: Ensure angle conventions are correct
+    // Standard ROS convention: angle_min < angle_max with positive increment
     if (remapped_msg->angle_min > remapped_msg->angle_max) {
       std::swap(remapped_msg->angle_min, remapped_msg->angle_max);
       if (!needs_reversal) {
@@ -139,7 +145,7 @@ private:
       std::round((remapped_msg->angle_max - remapped_msg->angle_min) / remapped_msg->angle_increment) + 1
     );
     
-    // Log first scan for debugging
+    // Log first scan for verification
     static bool first_scan = true;
     if (first_scan) {
       RCLCPP_INFO(this->get_logger(), 

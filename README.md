@@ -20,8 +20,8 @@ A **multi-robot SLAM (Simultaneous Localization and Mapping) system** using ROS 
 - **AIP Backlog:** [Google Sheet](https://docs.google.com/spreadsheets/d/18LbFuGbSA6lyf5C_sq3-1zMn88slf8hpBHtjBDwPiCw/edit?usp=sharing)
 
 ### UML & Design Diagrams
-- **UML Class Diagram:** [Link TBD]
-- **Activity Diagram:** [Link TBD]
+- **UML Class Diagram:** [View Diagram](UML/class_diagram.jpeg)
+- **Activity Diagram:** [View Diagram](UML/activity_diagram.jpeg)
 - **Sequence Diagram:** [Link TBD]
 
 ---
@@ -49,24 +49,44 @@ sudo apt install -y \
 
 ---
 
-## Build & Run
+## Quick Start
 
-### 1. Clone and Build
+### 1. Clone Repository
 
 ```bash
 cd ~/your_workspace
 git clone https://github.com/TirthSadaria/ENPM700-FinalProject-HiveRobots.git
 cd ENPM700-FinalProject-HiveRobots
+```
+
+### 2. Build Package
+
+```bash
+# Source ROS2 Humble
+source /opt/ros/humble/setup.bash
+
+# Build the workspace
 colcon build
+
+# Source the workspace
 source install/setup.bash
 ```
 
-### 2. Launch Multi-Robot SLAM
+### 3. Launch Multi-Robot SLAM
 
+**Basic launch (2 robots, no RViz):**
 ```bash
-source /opt/ros/humble/setup.bash
-source install/setup.bash
+ros2 launch hive_control hive_slam_final.launch.py
+```
+
+**With RViz visualization:**
+```bash
 ros2 launch hive_control hive_slam_final.launch.py num_robots:=2 enable_rviz:=true
+```
+
+**Custom number of robots:**
+```bash
+ros2 launch hive_control hive_slam_final.launch.py num_robots:=3 enable_rviz:=true
 ```
 
 ### Launch Arguments
@@ -81,13 +101,18 @@ ros2 launch hive_control hive_slam_final.launch.py num_robots:=2 enable_rviz:=tr
 
 ---
 
-## What Happens
+## System Workflow
 
-1. **Webots** launches with N TurtleBot3 robots in a warehouse environment
-2. Each robot runs **independent SLAM** (slam_toolbox)
-3. Robots **explore autonomously** using frontier-based exploration
-4. Individual maps are **merged in real-time** into `/map_merged`
-5. **RViz** displays the combined map (if enabled)
+When you launch the system, the following sequence occurs:
+
+1. **Webots Simulation** (0-5s): Webots launches with N TurtleBot3 robots in a warehouse environment
+2. **Controller Initialization** (5-10s): Robot controllers spawn and begin publishing odometry
+3. **SLAM Start** (25s): Each robot starts independent SLAM (slam_toolbox) and begins mapping
+4. **Map Merging** (35s): Map merger node starts combining individual maps into `/map_merged`
+5. **Autonomous Exploration**: Robots explore using frontier-based exploration with collision avoidance
+6. **Real-time Visualization**: RViz displays the merged map and robot positions (if enabled)
+
+**Note**: The system uses delayed launches to ensure proper TF tree initialization before SLAM starts.
 
 ---
 

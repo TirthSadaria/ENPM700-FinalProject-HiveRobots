@@ -92,8 +92,14 @@ def get_controller_spawners(controller_params_file, namespace):
 
 
 def launch_setup(context, *args, **kwargs):
-    """Launch setup for decentralized multi-robot SLAM."""
-    # HOTFIX: https://github.com/cyberbotics/webots_ros2/issues/567
+    """
+    Launch setup for decentralized multi-robot SLAM.
+    
+    Sets up Webots simulation, robot controllers, SLAM nodes, and map merging
+    for collaborative multi-robot exploration and mapping.
+    """
+    # Workaround for Webots controller library path issue
+    # See: https://github.com/cyberbotics/webots_ros2/issues/567
     if "LD_LIBRARY_PATH" in os.environ:
         os.environ["LD_LIBRARY_PATH"] += ":/opt/ros/humble/lib/controller"
     else:
@@ -169,7 +175,7 @@ def launch_setup(context, *args, **kwargs):
         import copy
         params = copy.deepcopy(original_params)
         
-        # CRITICAL FIX: Set frame IDs WITHOUT namespace prefix
+        # Set frame IDs WITHOUT namespace prefix
         # The diffdrive_controller already runs in the namespace, so it will 
         # automatically add the namespace prefix to frame names.
         # Using "odom" will become "tb1/odom" when running in tb1 namespace.
@@ -208,9 +214,7 @@ def launch_setup(context, *args, **kwargs):
     # 1. LAUNCH THE MAP MERGER (Centralized Visualization)
     # =========================================================
     # This takes the N decentralized maps and displays one global view
-    # CRITICAL FIX 1: Map Merging Node Setup
-    # - known_init_poses: True - USE KNOWN SPAWN COORDINATES!
-    # - Init poses passed directly to avoid YAML format issues
+    # Map merging uses feature-based estimation to auto-align maps
     map_merge_params_file = os.path.join(
         get_package_share_directory("hive_control"),
         "config",
@@ -236,8 +240,6 @@ def launch_setup(context, *args, **kwargs):
         output="screen",
         condition=IfCondition(enable_map_merge),
     )
-
-    # Note: No world->map transform needed - merged map uses frame_id: world directly
 
     # =========================================================
     # 2. LAUNCH ROBOTS LOOP
@@ -294,13 +296,13 @@ def launch_setup(context, *args, **kwargs):
         # =========================================================
         # This implements the "Shared Reference Frame" from the docs
         # It tells the system: "tbX/map is located HERE in the world"
-        # CRITICAL: Invert X coordinate to fix left/right mismatch in RViz
+        # Uses actual spawn position to anchor each robot's map frame
         world_to_map_tf = Node(
             package="tf2_ros",
             executable="static_transform_publisher",
             name=f'{robot_name}_world_anchor',
             arguments=[
-                str(x), str(y), str(z),  # x y z (NO inversion - use actual spawn position)
+                str(x), str(y), str(z),  # x y z (spawn position)
                 "0", "0", "0", "1",  # qx qy qz qw (identity quaternion)
                 "world",
                 f'{robot_name}/map'
@@ -330,7 +332,7 @@ def launch_setup(context, *args, **kwargs):
             executable="scan_frame_remapper",
             name="scan_frame_remapper",
             namespace=namespace,
-            parameters=[{"use_sim_time": use_sim_time}],  # CRITICAL: Use sim_time for this->now()
+            parameters=[{"use_sim_time": use_sim_time}],  # Use sim_time for timestamp synchronization
             remappings=[
                 ("scan_in", "scan_raw"),  # Subscribe to raw scan from Webots
                 ("scan", "scan"),  # Publish corrected scan for SLAM
@@ -340,15 +342,13 @@ def launch_setup(context, *args, **kwargs):
         robot_nodes.append(frame_remapper)
 
         # =========================================================
-        # B. DECENTRALIZED SLAM - CRITICAL FIX 3
+        # B. ASYNC SLAM (per robot)
+        # Note: decentralized_multirobot_slam_toolbox_node requires building from source
+        # Using async_slam_toolbox_node + map_merge instead
         # =========================================================
-        # CRITICAL FIX 3: SLAM Mode & Odometry Robustness
-        # - Uses async_slam_toolbox_node for real-time operation
-        # - Parameters tuned for odometry drift mitigation
-        # - Huber loss function configured for outlier rejection
         slam_node = Node(
             package="slam_toolbox",
-            executable="async_slam_toolbox_node",  # CRITICAL: Async mode for real-time operation
+            executable="async_slam_toolbox_node",
             name="slam_toolbox",
             namespace=namespace,
             parameters=[
@@ -365,7 +365,6 @@ def launch_setup(context, *args, **kwargs):
             ],
             remappings=[
                 ("/scan", f"/{namespace}/scan"),
-                ("/odom", f"/{namespace}/odom"),
                 ("/map", f"/{namespace}/map"),
                 ("/map_metadata", f"/{namespace}/map_metadata"),
             ],
@@ -395,7 +394,7 @@ def launch_setup(context, *args, **kwargs):
         )
         robot_nodes.append(hive_controller)
 
-    # CRITICAL FIX 1: Ensure transforms are published early
+    # Ensure transforms are published early
     # World anchor transforms must be published before SLAM starts
     # This establishes the world frame and map frame relationships
     
@@ -407,9 +406,9 @@ def launch_setup(context, *args, **kwargs):
     )
 
     # Delay SLAM launch significantly (after TF tree is fully established)
-    # CRITICAL: SLAM needs odom->base_link TF from diff_drive_controller
+    # SLAM needs odom->base_link TF from diff_drive_controller
     # diff_drive_controller starts ~5 seconds after spawners
-    # So we need to wait: 10s (spawners) + 5s (controller init) + 10s (buffer) = 25s
+    # Wait time: 10s (spawners) + 5s (controller init) + 10s (buffer) = 25s
     delayed_slam = TimerAction(
         period=25.0,  # Increased from 15s to 25s for TF stability
         actions=slam_nodes,

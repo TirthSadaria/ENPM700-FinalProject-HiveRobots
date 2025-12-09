@@ -312,7 +312,7 @@ DEF SMALL_PILLAR3 Solid {{
 """
     
     # Add robots (only up to num_robots)
-    # CRITICAL: Include lidar 180° rotation to fix backwards orientation
+    # Include lidar 180° rotation to correct Webots lidar orientation
     for i in range(1, num_robots + 1):
         pos = SPAWN_POSITIONS[(i - 1) % len(SPAWN_POSITIONS)]
         world_content += f"""# Robot {i}

@@ -131,6 +131,13 @@ private:
   int stuck_counter_ = 0;  // Counts how long robot has been in same area
   double last_min_distance_ = 0.0;  // Last minimum distance to obstacles
   static constexpr int STUCK_THRESHOLD = 50;  // If stuck for 50 cycles (~5 seconds), force recovery
+  
+  // Super stuck detection - if multiple stuck recoveries fail, try new exploration
+  int stuck_recovery_count_ = 0;  // How many times we've entered stuck recovery
+  static constexpr int SUPER_STUCK_THRESHOLD = 3;  // After 3 failed recoveries, do aggressive exploration
+  bool in_super_stuck_recovery_ = false;  // Currently doing aggressive exploration
+  int super_stuck_phase_ = 0;  // Phase of super stuck recovery (0=spin, 1=forward, 2=turn)
+  int super_stuck_cycles_ = 0;  // Cycles remaining in current phase
 };
 
 /**
