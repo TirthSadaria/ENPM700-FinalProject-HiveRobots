@@ -136,4 +136,33 @@ if(BUILD_TESTING)
   
 endif()
 
+# ------------------------------------------------------------------------------
+# Code Coverage Support
+# ------------------------------------------------------------------------------
+
+if(WANT_COVERAGE)
+  # Enable coverage flags
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage -fprofile-arcs -ftest-coverage")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage -fprofile-arcs -ftest-coverage")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
+  
+  # Find lcov and gcovr
+  find_program(LCOV_PATH lcov)
+  find_program(GCOVR_PATH gcovr)
+  
+  if(LCOV_PATH AND GCOVR_PATH)
+    # Custom target to generate coverage report
+    add_custom_target(test_coverage
+      COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+      COMMAND ${LCOV_PATH} --directory . --capture --output-file test_coverage.info
+      COMMAND ${LCOV_PATH} --remove test_coverage.info '/usr/*' '*/test/*' '*/build/*' --output-file test_coverage.info
+      COMMAND ${LCOV_PATH} --list test_coverage.info
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+      COMMENT "Generating code coverage report"
+    )
+  else()
+    message(WARNING "lcov or gcovr not found. Coverage target will not be available.")
+  endif()
+endif()
+
 ament_package()

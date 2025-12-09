@@ -1,0 +1,73 @@
+##############################################################################
+#
+# GitGub CI workflow syntax spec:
+#    https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
+#
+# CodeCov github action setup:
+#    https://github.com/codecov/codecov-action
+#
+# CodeCov badge setup:
+#    https://docs.codecov.com/docs/status-badges
+#
+# version 1.1
+##############################################################################
+
+name: Run Unit Test and Upload Coverage Report
+
+on:
+  # Triggered whenever push to main or phase-2
+  push:
+    branches: [ "main", "phase-2" ]
+
+  # Triggered whenever a pull request is created on main or phase-2
+  pull_request:
+    branches: [ "main", "phase-2" ]
+    types: [opened]
+
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  build-run-upload:
+    # Create a container of the latest Ubuntu, other values could be
+    # ubuntu-latest, ubuntu-22.04, etc.
+    runs-on: ubuntu-22.04
+
+    steps:
+      # We want to use GitHub CI checkout version 3 to check out our branch
+      - uses: actions/checkout@v3
+
+      # Install ROS2 Humble and dependencies
+      - name: Install ROS2 Humble
+        run: |
+          sudo apt update
+          sudo apt install -y software-properties-common
+          sudo add-apt-repository universe
+          sudo apt install -y curl gnupg lsb-release
+          sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sudo apt-key add -
+          sudo sh -c 'echo "deb [arch=$(dpkg --print-architecture)] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list'
+          sudo apt update
+          sudo apt install -y ros-humble-desktop
+          sudo apt install -y doxygen lcov gcovr python3-colcon-common-extensions
+
+      # Source ROS2 and build
+      - name: Configure CMake flags and build executables
+        shell: bash
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon build --cmake-args -D WANT_COVERAGE=ON -D CMAKE_BUILD_TYPE=Debug
+          source install/setup.bash
+          cd build/hive_control
+          make test_coverage || cmake --build . --target test_coverage
+          cat test_coverage.info || find . -name "*.info" | head -1 | xargs cat || echo "Coverage file not found"
+
+      # Upload coverage result to CodeCov
+      - name: Upload coverage result to CodeCov
+        uses: codecov/codecov-action@v4
+        with:
+          token: 175f1568-f979-46b2-af21-2a2b1ed414a4 # CodeCov token
+          files: ${{github.workspace}}/build/hive_control/test_coverage.info
+          fail_ci_if_error: false # optional (set to true once token is configured)
+          verbose: true # optional (default = false)
+          disable_search: true # optional (default = false)
+          plugin: none         # optional (xcode, gcov, pycoverage)
