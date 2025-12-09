@@ -13,7 +13,7 @@ map_merge:
     # USE ESTIMATION MODE - auto-aligns maps using feature matching
     # More robust than known_init_poses which has parameter format issues
     known_init_poses: false
-    estimation_confidence: 0.2  # Low threshold = accept matches faster
+    estimation_confidence: 0.1  # Very low threshold = accept matches faster
     
     # Topic names (without namespace)
     robot_map_topic: "map"

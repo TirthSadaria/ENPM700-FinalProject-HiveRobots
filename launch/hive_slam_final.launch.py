@@ -230,27 +230,14 @@ def launch_setup(context, *args, **kwargs):
                 "use_sim_time": use_sim_time,
                 "merged_map_topic": "map_merged",
                 "known_init_poses": False,  # Use feature-based estimation
-                "estimation_confidence": 0.2,  # Low threshold for faster matching
+                "estimation_confidence": 0.1,  # Very low threshold for faster matching
             },
         ],
         output="screen",
         condition=IfCondition(enable_map_merge),
     )
 
-    # Static transform for merged map frame
-    static_map_tf = Node(
-        package="tf2_ros",
-        executable="static_transform_publisher",
-        name="static_map_tf",
-        arguments=[
-            "0", "0", "0",  # x y z
-            "0", "0", "0", "1",  # qx qy qz qw (identity quaternion)
-            "world",
-            "map",
-        ],
-        output="screen",
-        condition=IfCondition(enable_map_merge),
-    )
+    # Note: No world->map transform needed - merged map uses frame_id: world directly
 
     # =========================================================
     # 2. LAUNCH ROBOTS LOOP
@@ -313,7 +300,7 @@ def launch_setup(context, *args, **kwargs):
             executable="static_transform_publisher",
             name=f'{robot_name}_world_anchor',
             arguments=[
-                str(-x), str(y), str(z),  # x y z (invert X: -x to fix RViz alignment)
+                str(x), str(y), str(z),  # x y z (NO inversion - use actual spawn position)
                 "0", "0", "0", "1",  # qx qy qz qw (identity quaternion)
                 "world",
                 f'{robot_name}/map'
@@ -323,30 +310,21 @@ def launch_setup(context, *args, **kwargs):
         )
         robot_nodes.append(world_to_map_tf)
 
-        # Static TF from base_link to laser frame - CRITICAL FIX 2
-        # CRITICAL FIX 2: Lidar Transform Rotation
-        # - Apply 180° rotation around Z axis using quaternion (0, 0, 1, 0)
-        # - This fixes backwards lidar orientation at the transform level
-        static_laser_tf = Node(
+        # TF: base_link -> LDS-01 (required for SLAM to find lidar frame)
+        lidar_tf = Node(
             package="tf2_ros",
             executable="static_transform_publisher",
-            name=f'{robot_name}_lidar_correction',
-            arguments=[
-                "0", "0", "0",  # x y z
-                "0", "0", "0", "1",  # qx qy qz qw (identity - no rotation, angles fixed in software)
-                f'{robot_name}/base_link',
-                f'{robot_name}/LDS-01'
-            ],
+            name=f'{robot_name}_lidar_tf',
+            arguments=["0", "0", "0", "0", "0", "0", "1",
+                       f'{robot_name}/base_link', f'{robot_name}/LDS-01'],
             parameters=[{"use_sim_time": use_sim_time}],
             output="screen",
         )
-        robot_nodes.append(static_laser_tf)
+        robot_nodes.append(lidar_tf)
 
-        # Scan Frame Remapper - CRITICAL FIX 2
-        # CRITICAL FIX 2: Scan Data Inversion & Frame ID Remapping
-        # - Performs scan data inversion (reverses ranges array, flips angles)
-        # - Remaps frame ID from LDS-01 to tbX/LDS-01 (robot-namespaced)
-        # - This is the second layer of lidar correction (works with transform above)
+        # Scan Frame Remapper - corrects Webots inverted lidar angles
+        # Input: angle_min=+π, angle_max=-π, increment=-0.017
+        # Output: angle_min=-π, angle_max=+π, increment=+0.017
         frame_remapper = Node(
             package="hive_control",
             executable="scan_frame_remapper",
@@ -438,19 +416,7 @@ def launch_setup(context, *args, **kwargs):
         condition=IfCondition(enable_slam),
     )
 
-    # Delay map merge (after SLAM has initial maps)
-    # CRITICAL FIX 1: Map merge needs initial poses to be set via static transforms
-    # CRITICAL: Launch static_map_tf EARLY (at 5s) to establish world->map transform
-    # This ensures the merged map frame exists before map_merge starts
-    delayed_static_map_tf = TimerAction(
-        period=5.0,  # Launch early to establish world->map transform
-        actions=[static_map_tf],
-        condition=IfCondition(enable_map_merge),
-    )
-    
-    # Map merge starts after SLAM has had time to generate initial maps
-    # map_merge starts after SLAM has initial maps
-    # init_pose params are passed directly to the node at creation
+    # map_merge starts after SLAM has had time to generate initial maps
     delayed_map_merge = TimerAction(
         period=35.0,  # 10s after SLAM starts
         actions=[map_merge_node],
@@ -476,8 +442,7 @@ def launch_setup(context, *args, **kwargs):
         *robot_nodes,
         delayed_spawners,
         delayed_slam,
-        delayed_static_map_tf,  # Launch early to establish world->map transform
-        delayed_map_merge,  # init_pose params are passed directly to node
+        delayed_map_merge,
     ]
     
     if rviz_node:
