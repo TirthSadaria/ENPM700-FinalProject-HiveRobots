@@ -2,6 +2,7 @@
 
 """
 Generate Webots world file with only the requested number of robots.
+
 This script creates a temporary world file with only num_robots robots.
 """
 
@@ -26,7 +27,6 @@ SPAWN_POSITIONS = [
 
 def generate_world_file(num_robots: int, output_path: str):
     """Generate a world file with only num_robots robots."""
-    
     world_content = f"""#VRML_SIM R2023b utf8
 
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/backgrounds/protos/TexturedBackground.proto"

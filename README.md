@@ -121,48 +121,73 @@ When you launch the system, the following sequence occurs:
 ```
 ENPM700-FinalProject-HiveRobots/
 ├── src/                          # C++ source files
-│   ├── hive_controller_node.cpp  # ROS2 node interface
-│   ├── hive_controller.cpp       # State machine controller
-│   ├── hive_state.cpp            # Robot behavior states
-│   └── scan_frame_remapper.cpp   # Lidar scan processing
+│   ├── hive_controller_node.cpp  # ROS2 node interface (subscribers/publishers)
+│   ├── hive_controller.cpp       # State machine controller implementation
+│   ├── hive_state.cpp            # Robot behavior states (SEARCH, COORDINATION, etc.)
+│   └── scan_frame_remapper.cpp   # Lidar scan frame remapping and angle normalization
 ├── include/hive_control/         # Header files
-│   ├── hive_controller.hpp
-│   └── hive_state.hpp
-├── test/
-│   └── test_hive_control.cpp     # Unit tests (gtest)
+│   ├── hive_controller.hpp       # Controller class definition
+│   ├── hive_state.hpp            # State classes definition
+│   └── hive_controller_node.hpp  # ROS2 node class definition
+├── test/                         # Unit tests
+│   ├── test_hive_control.cpp     # Comprehensive test suite (40 tests)
+│   └── test_hive_controller.cpp  # Controller-specific tests (26 tests)
 ├── launch/
-│   └── hive_slam_final.launch.py # Main launch file
+│   └── hive_slam_final.launch.py # Main launch file for multi-robot SLAM
 ├── config/
-│   ├── slam_params.yaml          # SLAM configuration
+│   ├── slam_params.yaml          # SLAM configuration (slam_toolbox)
 │   ├── map_merge_params.yaml     # Map merge configuration
-│   ├── hive_debug.rviz           # RViz configuration
-│   └── turtlebot_webots_no_imu.urdf
+│   ├── hive_debug.rviz           # RViz visualization configuration
+│   └── turtlebot_webots_no_imu.urdf  # Robot URDF description
 ├── scripts/
-│   └── generate_world.py         # Dynamic world generation
+│   ├── generate_world.py         # Dynamic Webots world generation
+│   ├── generate_rviz_config.py  # Dynamic RViz config generation
+│   └── world_frame_publisher.py  # World frame TF publisher
 ├── worlds/
-│   └── warehouse.wbt             # Webots world file
+│   └── warehouse.wbt             # Webots world file template
 └── README.md
 ```
+
+## Architecture
+
+The system uses a **State Design Pattern** for robot behavior management:
+
+- **HiveController**: Context class that maintains current state and manages state transitions
+- **State Classes**: 
+  - `SearchState`: Autonomous exploration with frontier detection and collision avoidance
+  - `CoordinationState`: Robot coordination to avoid conflicts
+  - `ConvergenceState`: Rendezvous behavior for map merging
+  - `IdleState`: Waiting/holding state
+
+**Multi-Robot SLAM Architecture:**
+- Each robot runs independent SLAM (decentralized approach)
+- Static transforms anchor each robot's map frame to a shared world frame
+- Map merger combines individual maps using feature-based estimation
+- World frame publisher ensures proper TF tree connectivity
 
 ---
 
 ## Key Features
 
 ### Robot Behavior
-- **Frontier-based exploration**: Robots move toward unmapped areas
-- **Collision avoidance**: Lidar-based obstacle detection
-- **Stuck detection**: Automatic recovery when robots get stuck
-- **Randomized turns**: Prevents robots from bunching together
+- **Frontier-based exploration**: Robots move toward unmapped areas using map data
+- **Collision avoidance**: Lidar-based obstacle detection with multiple safety thresholds
+- **Stuck detection**: Position-based and pattern-based detection with automatic recovery
+- **Randomized turns**: Prevents "lemming effect" where all robots turn the same direction
+- **Super stuck recovery**: Multi-phase recovery mechanism for persistent stuck situations
 
 ### SLAM System
-- **Independent SLAM per robot**: Each robot builds its own map
-- **Real-time map merging**: Maps combined using feature matching
-- **Coordinate alignment**: Static transforms anchor maps to world frame
+- **Independent SLAM per robot**: Each robot runs its own slam_toolbox instance
+- **Real-time map merging**: Maps combined using feature-based estimation
+- **Coordinate alignment**: Static transforms anchor each robot's map frame to world frame
+- **World frame establishment**: Dedicated node ensures proper TF tree connectivity
 
 ### Configuration
-- **Map resolution**: 0.05m (5cm)
-- **Map update interval**: 2.0s
-- **Scan processing**: Angle normalization for Webots lidar compatibility
+- **Map resolution**: 0.05m (5cm per pixel)
+- **Map update interval**: 1.0s (configurable in slam_params.yaml)
+- **Scan processing**: Automatic angle normalization for Webots lidar compatibility
+- **Lidar rate**: 3 Hz (reduced from 5 Hz to prevent queue overflow)
+- **Stuck detection**: 5cm minimum movement threshold, 5-second timeout
 
 ---
 
@@ -205,7 +230,19 @@ ros2 topic echo /map_merged --once | grep -E "width|height|resolution"
 
 ## Testing
 
-The project includes **Level 1 and Level 2 unit tests** using Google Test (gtest) framework to ensure code quality and reliability. The test suite covers core functionality including controller instantiation, battery management, rotation direction toggling, lidar scan angle normalization, and obstacle detection threshold validation.
+The project includes comprehensive **unit tests** using Google Test (gtest) framework to ensure code quality and reliability. The test suite provides extensive coverage of:
+
+- **Controller Functionality**: State management, battery tracking, rotation direction
+- **State Machine**: All state transitions (IDLE, SEARCH, COORDINATION, CONVERGENCE)
+- **Obstacle Avoidance**: Collision detection, stuck recovery, edge cases
+- **Sensor Processing**: Laser scan handling, odometry integration, map management
+- **Frontier Exploration**: Map-based exploration, frontier detection
+- **Edge Cases**: Invalid data, empty scans, boundary conditions
+
+**Test Statistics:**
+- 40 tests in `test_hive_control.cpp`
+- 26 tests in `test_hive_controller.cpp`
+- All tests passing with comprehensive coverage
 
 ```bash
 # Build and run tests
@@ -214,6 +251,7 @@ source install/setup.bash
 
 # Run unit tests directly
 ./build/hive_control/test_hive_control
+./build/hive_control/test_hive_controller
 
 # Or run all tests with colcon
 colcon test --packages-select hive_control

@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 
 """
-Decentralized Multi-Robot SLAM Launch File
+Decentralized Multi-Robot SLAM Launch File.
+
 Based on slam_toolbox decentralized architecture documentation.
-Each robot runs its own SLAM instance, anchored to world frame via static transforms.
+Each robot runs its own SLAM instance, anchored to world frame via static
+transforms.
 
 This implements the "Shared Reference Frame" approach where:
 - Each robot has its own map frame (tbX/map)
 - Static transforms anchor each map to world frame
 - Map merge combines individual maps into global view
 
-Reference: https://github.com/SteveMacenski/slam_toolbox/blob/ros2/docs/decentralized_multi_robot_slam.md
+Reference:
+https://github.com/SteveMacenski/slam_toolbox/blob/ros2/docs/
+decentralized_multi_robot_slam.md
 """
 
 import os
@@ -28,7 +32,6 @@ from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 from webots_ros2_driver.webots_launcher import WebotsLauncher
 from webots_ros2_driver.webots_controller import WebotsController
-import os
 
 
 # ---------------------------------------------------------
@@ -68,7 +71,7 @@ def get_controller_spawners(controller_params_file, namespace):
         if name not in ["update_rate", "publish_rate"]
     ]
     sorted_controller_names = sorted(
-        controller_names, 
+        controller_names,
         key=lambda x: (x != "joint_state_broadcaster", x)
     )
     controller_spawners = []
@@ -94,7 +97,7 @@ def get_controller_spawners(controller_params_file, namespace):
 def launch_setup(context, *args, **kwargs):
     """
     Launch setup for decentralized multi-robot SLAM.
-    
+
     Sets up Webots simulation, robot controllers, SLAM nodes, and map merging
     for collaborative multi-robot exploration and mapping.
     """
@@ -108,19 +111,22 @@ def launch_setup(context, *args, **kwargs):
     # Get package directories
     webots_ros2_turtlebot = get_package_share_directory("webots_ros2_turtlebot")
     hive_control_package = get_package_share_directory("hive_control")
-    
+
     # Launch configurations
     num_robots = int(LaunchConfiguration("num_robots").perform(context))
-    world = LaunchConfiguration("world")
     mode = LaunchConfiguration("mode")
     use_sim_time = LaunchConfiguration("use_sim_time")
     enable_slam = LaunchConfiguration("enable_slam", default="true")
     enable_map_merge = LaunchConfiguration("enable_map_merge", default="true")
 
     # Generate world file
-    workspace_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(hive_control_package))))
-    generate_world_script = os.path.join(workspace_root, "scripts", "generate_world.py")
-    
+    workspace_root = os.path.dirname(
+        os.path.dirname(
+            os.path.dirname(
+                os.path.dirname(hive_control_package))))
+    generate_world_script = os.path.join(
+        workspace_root, "scripts", "generate_world.py")
+
     script_locations = [
         generate_world_script,
         os.path.join(hive_control_package, "lib", "hive_control", "generate_world.py"),
@@ -144,7 +150,9 @@ def launch_setup(context, *args, **kwargs):
             capture_output=True,
             text=True
         )
-        print(f"[HIVE_SLAM_FINAL] Generated world file with {num_robots} robots: {temp_world_file.name}")
+        msg = (f"[HIVE_SLAM_FINAL] Generated world file with {num_robots} "
+               f"robots: {temp_world_file.name}")
+        print(msg)
     except subprocess.CalledProcessError as e:
         print(f"[ERROR] Failed to generate world file: {e}")
         temp_world_file.name = os.path.join(hive_control_package, "worlds", "warehouse.wbt")
@@ -176,7 +184,7 @@ def launch_setup(context, *args, **kwargs):
         params = copy.deepcopy(original_params)
         
         # Set frame IDs WITHOUT namespace prefix
-        # The diffdrive_controller already runs in the namespace, so it will 
+        # The diffdrive_controller already runs in the namespace, so it will
         # automatically add the namespace prefix to frame names.
         # Using "odom" will become "tb1/odom" when running in tb1 namespace.
         if "diffdrive_controller" in params:
@@ -205,10 +213,40 @@ def launch_setup(context, *args, **kwargs):
         hive_control_package, "config", "slam_params.yaml"
     ])
 
-    nodes = []
     robot_nodes = []
     slam_nodes = []
     all_spawners = []
+
+    # =========================================================
+    # 0. ESTABLISH WORLD FRAME (Root of TF tree)
+    # =========================================================
+    # World frame publisher node establishes the world frame as the root
+    # of the TF tree. It publishes static transforms from world to each
+    # robot's map frame and to base_link, ensuring proper TF connectivity
+    # when child frames appear from SLAM and robot_state_publisher.
+    world_frame_script = os.path.join(
+        hive_control_package, "lib", "hive_control", "world_frame_publisher.py"
+    )
+
+    # Fallback to source location if installed version doesn't exist
+    if not os.path.exists(world_frame_script):
+        world_frame_script = os.path.join(
+            os.path.dirname(
+                os.path.dirname(
+                    os.path.dirname(hive_control_package))),
+            "scripts", "world_frame_publisher.py"
+        )
+
+    world_frame_node = Node(
+        package="hive_control",
+        executable="world_frame_publisher.py",
+        name="world_frame_publisher",
+        parameters=[
+            {"use_sim_time": use_sim_time},
+            {"num_robots": num_robots},  # Pass number of robots
+        ],
+        output="screen",
+    )
 
     # =========================================================
     # 1. LAUNCH THE MAP MERGER (Centralized Visualization)
@@ -220,10 +258,11 @@ def launch_setup(context, *args, **kwargs):
         "config",
         "map_merge_params.yaml"
     )
-    
-    # Map merge node with estimation mode (auto-aligns maps)
-    # Reference: https://github.com/robo-friends/m-explore-ros2
-    # Using estimation mode avoids init_pose parameter format issues
+
+    # Map merge node uses feature-based estimation to automatically align
+    # and merge individual robot maps. This approach works reliably without
+    # requiring known initial robot positions, making it suitable for
+    # scenarios where robots start at unknown locations.
     map_merge_node = Node(
         package="multirobot_map_merge",
         executable="map_merge",
@@ -233,8 +272,9 @@ def launch_setup(context, *args, **kwargs):
             {
                 "use_sim_time": use_sim_time,
                 "merged_map_topic": "map_merged",
-                "known_init_poses": False,  # Use feature-based estimation
-                "estimation_confidence": 0.1,  # Very low threshold for faster matching
+                # Force known_init_poses to false to suppress warnings
+                "known_init_poses": False,
+                # Use estimation_confidence from config file (0.3 for faster matching)
             },
         ],
         output="screen",
@@ -247,14 +287,12 @@ def launch_setup(context, *args, **kwargs):
     for i in range(1, num_robots + 1):
         robot_name = f"tb{i}"
         namespace = robot_name
-        
+
         # Get spawn position
         if i <= len(SPAWN_POSITIONS):
             x, y, z = SPAWN_POSITIONS[i - 1]
         else:
             x, y, z = (0.0, 0.0, 0.0)  # Fallback
-        
-        yaw = 0.0  # All robots start with 0 yaw (facing forward)
 
         # Webots Controller
         use_twist_stamped = "ROS_DISTRO" in os.environ and (
@@ -297,6 +335,11 @@ def launch_setup(context, *args, **kwargs):
         # This implements the "Shared Reference Frame" from the docs
         # It tells the system: "tbX/map is located HERE in the world"
         # Uses actual spawn position to anchor each robot's map frame
+        #
+        # NOTE: static_transform_publisher will automatically create the parent
+        # frame (world) when publishing world->tbX/map. Robot 1's transform
+        # will create world, and subsequent robots will use the existing world
+        # frame.
         world_to_map_tf = Node(
             package="tf2_ros",
             executable="static_transform_publisher",
@@ -332,7 +375,8 @@ def launch_setup(context, *args, **kwargs):
             executable="scan_frame_remapper",
             name="scan_frame_remapper",
             namespace=namespace,
-            parameters=[{"use_sim_time": use_sim_time}],  # Use sim_time for timestamp synchronization
+            # Use sim_time for timestamp synchronization
+            parameters=[{"use_sim_time": use_sim_time}],
             remappings=[
                 ("scan_in", "scan_raw"),  # Subscribe to raw scan from Webots
                 ("scan", "scan"),  # Publish corrected scan for SLAM
@@ -389,6 +433,7 @@ def launch_setup(context, *args, **kwargs):
                 "cmd_vel_topic": "cmd_vel",
                 "scan_topic": "scan",
                 "map_topic": "map",
+                "odom_topic": "odom",
                 "enable_map_completion": True,
             }],
         )
@@ -397,7 +442,7 @@ def launch_setup(context, *args, **kwargs):
     # Ensure transforms are published early
     # World anchor transforms must be published before SLAM starts
     # This establishes the world frame and map frame relationships
-    
+
     # Delay spawners (let Webots controllers initialize first)
     # Controller spawners set up diff_drive_controller which publishes odom TF
     delayed_spawners = TimerAction(
@@ -416,8 +461,9 @@ def launch_setup(context, *args, **kwargs):
     )
 
     # map_merge starts after SLAM has had time to generate initial maps
+    # Reduced delay to start merging sooner (maps need time to develop features)
     delayed_map_merge = TimerAction(
-        period=35.0,  # 10s after SLAM starts
+        period=20.0,  # Start 5s after SLAM (was 35s) - gives SLAM 5s to generate initial maps
         actions=[map_merge_node],
         condition=IfCondition(enable_map_merge),
     )
@@ -425,12 +471,89 @@ def launch_setup(context, *args, **kwargs):
     # Optional: Launch RViz for visualization
     enable_rviz_arg = LaunchConfiguration("enable_rviz")
     pkg_share = get_package_share_directory("hive_control")
-    rviz_config_file = os.path.join(pkg_share, "config", "hive_debug.rviz")
+
+    # Generate RViz config dynamically based on number of robots
+    num_robots = int(LaunchConfiguration("num_robots").perform(context))
+
+    # Find the script - use same pattern as generate_world.py
+    # pkg_share is: <package_dir>/install/hive_control/share/hive_control
+    # Go up 4 levels to get to package_dir root
+    package_dir = os.path.dirname(
+        os.path.dirname(
+            os.path.dirname(
+                os.path.dirname(pkg_share))))
+
+    rviz_config_script_locations = [
+        os.path.join(
+            package_dir, "scripts", "generate_rviz_config.py"),
+        os.path.join(
+            pkg_share, "lib", "hive_control", "generate_rviz_config.py"),
+    ]
+
+    rviz_config_script = None
+    print("[HIVE_SLAM_FINAL] Searching for RViz config generator script...")
+    print(f"[HIVE_SLAM_FINAL] num_robots = {num_robots}")
+    for script_path in rviz_config_script_locations:
+        exists = os.path.exists(script_path)
+        print(f"[HIVE_SLAM_FINAL] Checking: {script_path} (exists: {exists})")
+        if exists:
+            rviz_config_script = script_path
+            print(f"[HIVE_SLAM_FINAL] ✓ Found at: {script_path}")
+            break
+
+    # Generate temporary RViz config file
+    temp_rviz_config_file = tempfile.NamedTemporaryFile(
+        mode='w', suffix='.rviz', delete=False)
+    temp_rviz_config_path = temp_rviz_config_file.name
+    temp_rviz_config_file.close()
+
+    # Generate RViz config file
+    if rviz_config_script and os.path.exists(rviz_config_script):
+        try:
+            result = subprocess.run(
+                [sys.executable, rviz_config_script, str(num_robots),
+                 temp_rviz_config_path],
+                check=True,
+                capture_output=True,
+                text=True,
+                cwd=workspace_root
+            )
+            msg = (f"[HIVE_SLAM_FINAL] Successfully generated RViz config "
+                   f"for {num_robots} robots")
+            print(msg)
+            print(f"[HIVE_SLAM_FINAL] Config file: {temp_rviz_config_path}")
+            print(f"[HIVE_SLAM_FINAL] Script output: {result.stdout}")
+            # Verify the file was created and has the right content
+            if os.path.exists(temp_rviz_config_path):
+                with open(temp_rviz_config_path, 'r') as f:
+                    content = f.read()
+                    # Count scan displays
+                    scan_count = content.count("TB") - content.count("TB1 Map")
+                    msg = (f"[HIVE_SLAM_FINAL] Config file contains "
+                           f"{scan_count} robot scan displays")
+                    print(msg)
+            rviz_config_to_use = temp_rviz_config_path
+        except subprocess.CalledProcessError as e:
+            print(f"[HIVE_SLAM_FINAL] ERROR: Failed to generate: {e}")
+            stderr = e.stderr if hasattr(e, 'stderr') else 'N/A'
+            print(f"[HIVE_SLAM_FINAL] stderr: {stderr}")
+            print("[HIVE_SLAM_FINAL] Falling back to default config")
+            rviz_config_to_use = os.path.join(
+                pkg_share, "config", "hive_debug.rviz")
+    else:
+        print("[HIVE_SLAM_FINAL] ERROR: RViz config generator not found!")
+        print(f"[HIVE_SLAM_FINAL] Searched in: {rviz_config_script_locations}")
+        print("[HIVE_SLAM_FINAL] Using default config (may only show 2 robots)")
+        rviz_config_to_use = os.path.join(
+            pkg_share, "config", "hive_debug.rviz")
+
+    print(f"[HIVE_SLAM_FINAL] RViz will use config: {rviz_config_to_use}")
+
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",
         name="rviz2",
-        arguments=["-d", rviz_config_file],
+        arguments=["-d", rviz_config_to_use],
         output="screen",
         condition=IfCondition(enable_rviz_arg),
     )
@@ -438,15 +561,16 @@ def launch_setup(context, *args, **kwargs):
     nodes_list = [
         webots,
         webots._supervisor,
-        *robot_nodes,
+        world_frame_node,  # Establish world frame early (publishes world->map transforms)
+        *robot_nodes,  # Additional world->map transforms (redundant but harmless)
         delayed_spawners,
         delayed_slam,
         delayed_map_merge,
     ]
-    
+
     if rviz_node:
         nodes_list.append(rviz_node)
-    
+
     return nodes_list + [
         launch.actions.RegisterEventHandler(
             event_handler=launch.event_handlers.OnProcessExit(

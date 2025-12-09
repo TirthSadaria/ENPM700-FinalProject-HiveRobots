@@ -14,8 +14,13 @@
 
 /**
  * @file hive_controller.hpp
- * @brief HIVE context class managing state transitions
- * @author Shreya
+ * @brief HiveController class managing robot state and behavior
+ *
+ * Implements the Context class in the State design pattern. Manages state
+ * transitions, sensor data storage, and provides interface for state classes
+ * to access robot context information.
+ *
+ * @author Shreya Kalyanaraman, Tirth Sadaria
  */
 
 #ifndef HIVE_CONTROL__HIVE_CONTROLLER_HPP_
@@ -27,6 +32,7 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 
 namespace hive_control
 {
@@ -49,15 +55,21 @@ enum class StateID
  * @brief Context class for State design pattern, manages robot behavior
  *
  * This class maintains the current state and handles state transitions
- * for the HIVE robot. It can also track battery level and choose
- * behaviors like exploring vs returning home.
+ * for the multi-robot system. It stores sensor data (laser scans, maps,
+ * odometry) and provides access to state classes. Also manages robot
+ * configuration such as rotation direction and battery level.
  */
 class HiveController
 {
 public:
   /**
-   * @brief Constructor - initializes in IDLE state
+   * @brief Constructor - initializes controller in SEARCH state
    * @param namespace_str ROS2 namespace (e.g., "/tb1" or "tb1") to extract robot ID
+   *
+   * Extracts robot ID from namespace to determine rotation direction:
+   * - Odd-numbered robots rotate clockwise
+   * - Even-numbered robots rotate counterclockwise
+   * This alternation prevents robots from bunching together.
    */
   explicit HiveController(const std::string & namespace_str = "");
 
@@ -129,6 +141,18 @@ public:
    */
   nav_msgs::msg::OccupancyGrid::SharedPtr getCurrentMap() const {return latest_map_;}
 
+  /**
+   * @brief Set the latest odometry data (for position-based stuck detection)
+   * @param odom Shared pointer to latest odometry
+   */
+  void setCurrentOdometry(const nav_msgs::msg::Odometry::SharedPtr & odom) {latest_odom_ = odom;}
+
+  /**
+   * @brief Get the latest odometry data
+   * @return Shared pointer to latest odometry, or nullptr if no odometry received yet
+   */
+  nav_msgs::msg::Odometry::SharedPtr getCurrentOdometry() const {return latest_odom_;}
+
 private:
   std::shared_ptr<HiveState> current_state_;  ///< Current concrete state
   bool clockwise_;                            ///< Rotation direction flag
@@ -136,6 +160,7 @@ private:
   StateID current_state_id_;                  ///< High-level state label
   sensor_msgs::msg::LaserScan::SharedPtr latest_scan_;  ///< Latest laser scan data
   nav_msgs::msg::OccupancyGrid::SharedPtr latest_map_;  ///< Latest map data (for frontier exploration)
+  nav_msgs::msg::Odometry::SharedPtr latest_odom_;      ///< Latest odometry data (for position tracking)
 };
 
 }  // namespace hive_control

@@ -7,13 +7,15 @@ map_merge:
     # General Parameters  
     # ==========================================
     merging_rate: 2.0           # Hz - how often to merge maps
-    discovery_rate: 1.0         # Hz - how often to discover new robots
-    estimation_rate: 1.0        # Hz - pose estimation rate
+    discovery_rate: 2.0         # Hz - how often to discover new robots (increased for faster discovery)
+    estimation_rate: 2.0        # Hz - pose estimation rate (increased for faster alignment)
     
-    # USE ESTIMATION MODE - auto-aligns maps using feature matching
-    # More robust than known_init_poses which has parameter format issues
+    # USE ESTIMATION MODE - feature-based auto-alignment
+    # NOTE: init_pose mode requires complex parameter setup in robot namespaces
+    # Estimation mode works reliably and will align maps automatically
+    # IMPORTANT: This must be false to disable init_pose checking
     known_init_poses: false
-    estimation_confidence: 0.1  # Very low threshold = accept matches faster
+    estimation_confidence: 0.2  # Lower = faster matching, 0.1 is most permissive for quick merging
     
     # Topic names (without namespace)
     robot_map_topic: "map"

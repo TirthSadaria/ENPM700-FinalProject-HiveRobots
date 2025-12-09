@@ -1,15 +1,90 @@
-Panels:
+#!/usr/bin/env python3
+"""
+Generate RViz configuration file dynamically based on number of robots.
+
+Each robot gets a laser scan display with a unique color.
+"""
+
+import sys
+import os
+
+# Color palette for robot laser scans (RGB values)
+ROBOT_COLORS = [
+    (255, 0, 0),      # Red - Robot 1
+    (0, 255, 0),      # Green - Robot 2
+    (0, 0, 255),      # Blue - Robot 3
+    (255, 255, 0),    # Yellow - Robot 4
+    (255, 0, 255),    # Magenta - Robot 5
+    (0, 255, 255),    # Cyan - Robot 6
+    (255, 128, 0),    # Orange - Robot 7
+    (128, 0, 255),    # Purple - Robot 8
+    (255, 192, 203),  # Pink - Robot 9
+    (128, 128, 128),  # Gray - Robot 10
+]
+
+
+def generate_laser_scan_display(robot_num, color_rgb):
+    """Generate RViz LaserScan display configuration for a robot."""
+    r, g, b = color_rgb
+    return f"""    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/LaserScan
+      Color: {r}; {g}; {b}
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: TB{robot_num} Scan
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 5
+      Size (m): 0.05
+      Style: Flat Squares
+      Topic:
+        Depth: 10
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: BestEffort
+        Value: /tb{robot_num}/scan
+      Use Fixed Frame: true
+      Use rainbow: false
+      Value: true"""
+
+
+def generate_rviz_config(num_robots):
+    """Generate complete RViz configuration file."""
+    # Generate laser scan displays for all robots
+    laser_scans = []
+    for i in range(1, num_robots + 1):
+        color_idx = (i - 1) % len(ROBOT_COLORS)
+        laser_scans.append(generate_laser_scan_display(i, ROBOT_COLORS[color_idx]))
+    
+    laser_scans_yaml = "\n".join(laser_scans)
+    
+    # Generate expanded list for display tree
+    expanded_list = ["/Global Options1", "/Status1", "/Merged Map1"]
+    for i in range(1, num_robots + 1):
+        expanded_list.append(f"/TB{i} Scan1")
+    
+    expanded_yaml = "\n".join([f"        - {item}" for item in expanded_list])
+    
+    rviz_config = f"""Panels:
   - Class: rviz_common/Displays
     Help Height: 78
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /Global Options1
-        - /Status1
-        - /Merged Map1
-        - /TB1 Scan1
-        - /TB2 Scan1
-        - /TB3 Scan1
+{expanded_yaml}
       Splitter Ratio: 0.5
     Tree Height: 557
 Visualization Manager:
@@ -33,105 +108,7 @@ Visualization Manager:
       Plane Cell Count: 10
       Reference Frame: <Fixed Frame>
       Value: true
-    - Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 10
-        Min Value: -10
-        Value: true
-      Axis: Z
-      Channel Name: intensity
-      Class: rviz_default_plugins/LaserScan
-      Color: 255; 0; 0
-      Color Transformer: FlatColor
-      Decay Time: 0
-      Enabled: true
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: TB1 Scan
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 5
-      Size (m): 0.05
-      Style: Flat Squares
-      Topic:
-        Depth: 10
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: BestEffort
-        Value: /tb1/scan
-      Use Fixed Frame: true
-      Use rainbow: false
-      Value: true
-    - Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 10
-        Min Value: -10
-        Value: true
-      Axis: Z
-      Channel Name: intensity
-      Class: rviz_default_plugins/LaserScan
-      Color: 0; 255; 0
-      Color Transformer: FlatColor
-      Decay Time: 0
-      Enabled: true
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: TB2 Scan
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 5
-      Size (m): 0.05
-      Style: Flat Squares
-      Topic:
-        Depth: 10
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: BestEffort
-        Value: /tb2/scan
-      Use Fixed Frame: true
-      Use rainbow: false
-      Value: true
-    - Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 10
-        Min Value: -10
-        Value: true
-      Axis: Z
-      Channel Name: intensity
-      Class: rviz_default_plugins/LaserScan
-      Color: 0; 0; 255
-      Color Transformer: FlatColor
-      Decay Time: 0
-      Enabled: true
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: TB3 Scan
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 5
-      Size (m): 0.05
-      Style: Flat Squares
-      Topic:
-        Depth: 10
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: BestEffort
-        Value: /tb3/scan
-      Use Fixed Frame: true
-      Use rainbow: false
-      Value: true
+{laser_scans_yaml}
     - Alpha: 0.7
       Class: rviz_default_plugins/Map
       Color Scheme: map
@@ -157,7 +134,7 @@ Visualization Manager:
       Show Axes: true
       Show Names: true
       Tree:
-        {}
+        {{}}
       Update Interval: 0.1
       Value: true
     - Class: rviz_default_plugins/RobotModel
@@ -245,3 +222,34 @@ Visualization Manager:
       Value: Orbit (rviz)
       Yaw: 0.5
     Saved: ~
+"""
+    
+    return rviz_config
+
+
+def main():
+    if len(sys.argv) != 3:
+        print("Usage: generate_rviz_config.py <num_robots> <output_file>")
+        sys.exit(1)
+    
+    num_robots = int(sys.argv[1])
+    output_file = sys.argv[2]
+    
+    if num_robots < 1 or num_robots > 10:
+        print("Error: num_robots must be between 1 and 10")
+        sys.exit(1)
+    
+    config = generate_rviz_config(num_robots)
+    
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    
+    with open(output_file, 'w') as f:
+        f.write(config)
+    
+    print(f"Generated RViz config for {num_robots} robots: {output_file}")
+
+
+if __name__ == "__main__":
+    main()
+
