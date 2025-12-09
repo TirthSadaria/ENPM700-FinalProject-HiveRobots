@@ -21,7 +21,7 @@ import subprocess
 
 import launch
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, TimerAction, OpaqueFunction, ExecuteProcess
+from launch.actions import DeclareLaunchArgument, TimerAction, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -217,7 +217,24 @@ def launch_setup(context, *args, **kwargs):
         "map_merge_params.yaml"
     )
     
-    # Map merge node with known initial poses
+    # Build init_pose parameters dictionary for all robots
+    # map_merge expects: <robot_ns>/map_merge/init_pose_x, y, z, yaw
+    # These MUST be passed when creating the node, not after
+    init_pose_params = {}
+    for i in range(1, num_robots + 1):
+        robot_ns = f"tb{i}"
+        if i <= len(SPAWN_POSITIONS):
+            x, y, z = SPAWN_POSITIONS[i - 1]
+        else:
+            x, y, z = (0.0, 0.0, 0.0)
+        
+        # Add init_pose parameters for this robot
+        init_pose_params[f"{robot_ns}/map_merge/init_pose_x"] = float(x)
+        init_pose_params[f"{robot_ns}/map_merge/init_pose_y"] = float(y)
+        init_pose_params[f"{robot_ns}/map_merge/init_pose_z"] = float(z)
+        init_pose_params[f"{robot_ns}/map_merge/init_pose_yaw"] = 0.0
+    
+    # Map merge node with known initial poses passed at creation time
     # Reference: https://github.com/robo-friends/m-explore-ros2
     map_merge_node = Node(
         package="multirobot_map_merge",
@@ -229,41 +246,11 @@ def launch_setup(context, *args, **kwargs):
                 "use_sim_time": use_sim_time,
                 "merged_map_topic": "map_merged",
             },
+            init_pose_params,  # Pass init poses directly to node
         ],
         output="screen",
         condition=IfCondition(enable_map_merge),
     )
-    
-    # Set init_pose parameters for each robot in map_merge node
-    # map_merge expects: /<robot_ns>/map_merge/init_pose_x, y, z, yaw
-    # These are set as parameters ON the map_merge node with robot namespace prefix
-    init_pose_setters = []
-    for i in range(1, num_robots + 1):
-        robot_ns = f"tb{i}"
-        if i <= len(SPAWN_POSITIONS):
-            x, y, z = SPAWN_POSITIONS[i - 1]
-        else:
-            x, y, z = (0.0, 0.0, 0.0)
-        
-        # Set init_pose parameters on map_merge node for each robot
-        init_pose_setters.extend([
-            ExecuteProcess(
-                cmd=["ros2", "param", "set", "/map_merge", f"{robot_ns}/map_merge/init_pose_x", str(float(x))],
-                output="screen",
-            ),
-            ExecuteProcess(
-                cmd=["ros2", "param", "set", "/map_merge", f"{robot_ns}/map_merge/init_pose_y", str(float(y))],
-                output="screen",
-            ),
-            ExecuteProcess(
-                cmd=["ros2", "param", "set", "/map_merge", f"{robot_ns}/map_merge/init_pose_z", str(float(z))],
-                output="screen",
-            ),
-            ExecuteProcess(
-                cmd=["ros2", "param", "set", "/map_merge", f"{robot_ns}/map_merge/init_pose_yaw", "0.0"],
-                output="screen",
-            ),
-        ])
 
     # Static transform for merged map frame
     static_map_tf = Node(
@@ -477,16 +464,11 @@ def launch_setup(context, *args, **kwargs):
     )
     
     # Map merge starts after SLAM has had time to generate initial maps
+    # map_merge starts after SLAM has initial maps
+    # init_pose params are passed directly to the node at creation
     delayed_map_merge = TimerAction(
-        period=35.0,  # Increased from 20s to 35s (10s after SLAM starts)
+        period=35.0,  # 10s after SLAM starts
         actions=[map_merge_node],
-        condition=IfCondition(enable_map_merge),
-    )
-    
-    # Set init_pose parameters after map_merge starts (40s = 35s + 5s buffer)
-    delayed_init_pose_setters = TimerAction(
-        period=40.0,
-        actions=init_pose_setters,
         condition=IfCondition(enable_map_merge),
     )
 
@@ -510,8 +492,7 @@ def launch_setup(context, *args, **kwargs):
         delayed_spawners,
         delayed_slam,
         delayed_static_map_tf,  # Launch early to establish world->map transform
-        delayed_map_merge,
-        delayed_init_pose_setters,  # Set init poses after map_merge starts
+        delayed_map_merge,  # init_pose params are passed directly to node
     ]
     
     if rviz_node:
