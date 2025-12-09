@@ -99,6 +99,8 @@ install(DIRECTORY
 
 install(PROGRAMS
   scripts/generate_world.py
+  scripts/generate_rviz_config.py
+  scripts/world_frame_publisher.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

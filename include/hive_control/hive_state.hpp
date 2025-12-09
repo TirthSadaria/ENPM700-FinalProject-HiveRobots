@@ -116,28 +116,31 @@ private:
   
   int search_duration_counter_ = 0;
   const double obstacle_distance_ = 0.5;
-  const double linear_velocity_ = 0.15;  // Reduced to prevent wheel maxVelocity overflow
-  // Removed MAX_SEARCH_TIME - robot should stay in SEARCH until mapping is complete
-  
-  // Randomization for turn direction to prevent "lemming effect"
-  int turn_direction_persistence_ = 0;  // How many cycles to persist current turn direction
-  int current_turn_direction_ = 0;     // 0 = left/positive, 1 = right/negative
-  
-  // Turn duration tracking for aggressive scattering (counter-based, ~10Hz = 100ms per cycle)
-  int turn_remaining_cycles_ = 0;  // How many cycles to keep turning (10-20 cycles = 1.0-2.0 seconds)
-  bool is_turning_ = false;        // Whether robot is currently in a turn maneuver
-  
-  // Stuck detection - track if robot hasn't made progress
-  int stuck_counter_ = 0;  // Counts how long robot has been in same area
-  double last_min_distance_ = 0.0;  // Last minimum distance to obstacles
-  static constexpr int STUCK_THRESHOLD = 50;  // If stuck for 50 cycles (~5 seconds), force recovery
-  
-  // Super stuck detection - if multiple stuck recoveries fail, try new exploration
-  int stuck_recovery_count_ = 0;  // How many times we've entered stuck recovery
-  static constexpr int SUPER_STUCK_THRESHOLD = 3;  // After 3 failed recoveries, do aggressive exploration
-  bool in_super_stuck_recovery_ = false;  // Currently doing aggressive exploration
-  int super_stuck_phase_ = 0;  // Phase of super stuck recovery (0=spin, 1=forward, 2=turn)
-  int super_stuck_cycles_ = 0;  // Cycles remaining in current phase
+  const double linear_velocity_ = 0.15;  ///< Forward velocity (m/s), limited for stability
+
+  /// Randomization parameters to prevent "lemming effect" (all robots turning same direction)
+  int turn_direction_persistence_ = 0;  ///< Cycles remaining for current turn direction
+  int current_turn_direction_ = 0;      ///< 0 = left/positive, 1 = right/negative
+
+  /// Turn duration tracking (counter-based, ~10Hz = 100ms per cycle)
+  int turn_remaining_cycles_ = 0;  ///< Cycles remaining in current turn (10-20 = 1.0-2.0s)
+  bool is_turning_ = false;        ///< Whether robot is currently executing a turn maneuver
+
+  /// Stuck detection parameters
+  int stuck_counter_ = 0;              ///< Counts consecutive cycles without progress
+  double last_min_distance_ = 0.0;     ///< Last minimum distance to obstacles (m)
+  double last_position_x_ = 0.0;        ///< Last X position from odometry (m)
+  double last_position_y_ = 0.0;       ///< Last Y position from odometry (m)
+  bool has_last_position_ = false;     ///< Whether we have a valid last position
+  static constexpr int STUCK_THRESHOLD = 50;  ///< Cycles before triggering recovery (~5s)
+  static constexpr double MIN_MOVEMENT_DISTANCE = 0.05;  ///< Minimum movement to avoid stuck (5cm)
+
+  /// Super stuck recovery parameters (for persistent stuck situations)
+  int stuck_recovery_count_ = 0;       ///< Number of times stuck recovery has been triggered
+  static constexpr int SUPER_STUCK_THRESHOLD = 3;  ///< Failed recoveries before aggressive mode
+  bool in_super_stuck_recovery_ = false;  ///< Currently executing aggressive recovery
+  int super_stuck_phase_ = 0;           ///< Current phase (0=spin, 1=forward, 2=turn)
+  int super_stuck_cycles_ = 0;          ///< Cycles remaining in current phase
 };
 
 /**

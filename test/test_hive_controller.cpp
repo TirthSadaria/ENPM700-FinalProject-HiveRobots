@@ -340,5 +340,453 @@ TEST_F(HiveControllerTest, TestEmptyScanHandling) {
   EXPECT_TRUE(std::isfinite(cmd_vel.angular.z));
 }
 
+// =============================================================================
+// TEST 9: TestOdometrySetterGetter
+// =============================================================================
+/**
+ * @brief Test odometry setter and getter methods
+ */
+TEST_F(HiveControllerTest, TestOdometrySetterGetter) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Initially no odometry
+  EXPECT_EQ(controller->getCurrentOdometry(), nullptr);
+  
+  // Create and set odometry
+  auto odom = std::make_shared<nav_msgs::msg::Odometry>();
+  odom->header.stamp = rclcpp::Clock().now();
+  odom->header.frame_id = "odom";
+  odom->child_frame_id = "base_link";
+  odom->pose.pose.position.x = 1.5;
+  odom->pose.pose.position.y = 2.5;
+  odom->pose.pose.orientation.w = 1.0;
+  
+  controller->setCurrentOdometry(odom);
+  
+  // Verify odometry was stored
+  auto retrieved_odom = controller->getCurrentOdometry();
+  ASSERT_NE(retrieved_odom, nullptr);
+  EXPECT_DOUBLE_EQ(retrieved_odom->pose.pose.position.x, 1.5);
+  EXPECT_DOUBLE_EQ(retrieved_odom->pose.pose.position.y, 2.5);
+}
+
+// =============================================================================
+// TEST 10: TestMapSetterGetter
+// =============================================================================
+/**
+ * @brief Test map setter and getter methods
+ */
+TEST_F(HiveControllerTest, TestMapSetterGetter) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Initially no map
+  EXPECT_EQ(controller->getCurrentMap(), nullptr);
+  
+  // Create and set map
+  auto map = std::make_shared<nav_msgs::msg::OccupancyGrid>();
+  map->header.stamp = rclcpp::Clock().now();
+  map->header.frame_id = "map";
+  map->info.width = 50;
+  map->info.height = 50;
+  map->info.resolution = 0.05;
+  map->data = std::vector<int8_t>(2500, 0);
+  
+  controller->setCurrentMap(map);
+  
+  // Verify map was stored
+  auto retrieved_map = controller->getCurrentMap();
+  ASSERT_NE(retrieved_map, nullptr);
+  EXPECT_EQ(retrieved_map->info.width, 50);
+  EXPECT_EQ(retrieved_map->info.height, 50);
+}
+
+// =============================================================================
+// TEST 11: TestScanGetter
+// =============================================================================
+/**
+ * @brief Test getCurrentScan method
+ */
+TEST_F(HiveControllerTest, TestScanGetter) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Initially no scan
+  EXPECT_EQ(controller->getCurrentScan(), nullptr);
+  
+  // Process a scan
+  std::vector<float> ranges(360, 1.5f);
+  auto scan = createFakeLaserScan(ranges);
+  controller->processLaserScan(scan);
+  
+  // Verify scan was stored
+  auto retrieved_scan = controller->getCurrentScan();
+  ASSERT_NE(retrieved_scan, nullptr);
+  EXPECT_EQ(retrieved_scan->ranges.size(), 360);
+}
+
+// =============================================================================
+// TEST 12: TestStateIDGetter
+// =============================================================================
+/**
+ * @brief Test getCurrentStateId method
+ */
+TEST_F(HiveControllerTest, TestStateIDGetter) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Initial state should be EXPLORING
+  EXPECT_EQ(controller->getCurrentStateId(), hive_control::StateID::EXPLORING);
+  
+  // Change to IDLE
+  controller->setState(std::make_shared<hive_control::IdleState>());
+  EXPECT_EQ(controller->getCurrentStateId(), hive_control::StateID::IDLE);
+  
+  // Change back to SEARCH
+  controller->setState(std::make_shared<hive_control::SearchState>());
+  EXPECT_EQ(controller->getCurrentStateId(), hive_control::StateID::EXPLORING);
+}
+
+// =============================================================================
+// TEST 13: TestObstacleAvoidance_CloseObstacle
+// =============================================================================
+/**
+ * @brief Test obstacle avoidance with very close obstacle (0.2m)
+ */
+TEST_F(HiveControllerTest, TestObstacleAvoidance_CloseObstacle) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Create scan with very close obstacle
+  std::vector<float> close_ranges(360, 0.2f);
+  auto scan = createFakeLaserScan(close_ranges);
+  
+  controller->processLaserScan(scan);
+  auto cmd_vel = controller->getVelocityCommand();
+  
+  // Robot should back up or turn (not move forward)
+  EXPECT_LE(cmd_vel.linear.x, 0.1) << "Robot should not move forward when obstacle is very close";
+  EXPECT_TRUE(std::isfinite(cmd_vel.linear.x));
+  EXPECT_TRUE(std::isfinite(cmd_vel.angular.z));
+}
+
+// =============================================================================
+// TEST 14: TestObstacleAvoidance_FarObstacle
+// =============================================================================
+/**
+ * @brief Test obstacle avoidance with far obstacle (3.0m)
+ */
+TEST_F(HiveControllerTest, TestObstacleAvoidance_FarObstacle) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Create scan with far obstacle
+  std::vector<float> far_ranges(360, 3.0f);
+  auto scan = createFakeLaserScan(far_ranges);
+  
+  controller->processLaserScan(scan);
+  auto cmd_vel = controller->getVelocityCommand();
+  
+  // Robot should be able to move forward when obstacle is far
+  EXPECT_TRUE(std::isfinite(cmd_vel.linear.x));
+  EXPECT_TRUE(std::isfinite(cmd_vel.angular.z));
+  // May move forward or turn slightly
+  EXPECT_GE(cmd_vel.linear.x, -1.0);
+  EXPECT_LE(cmd_vel.linear.x, 1.0);
+}
+
+// =============================================================================
+// TEST 15: TestAllStates_IdleState
+// =============================================================================
+/**
+ * @brief Test IdleState behavior
+ */
+TEST_F(HiveControllerTest, TestAllStates_IdleState) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Force IDLE state
+  auto idle_state = std::make_shared<hive_control::IdleState>();
+  controller->setState(idle_state);
+  EXPECT_EQ(controller->getCurrentStateName(), "IDLE");
+  
+  // Create scan
+  std::vector<float> ranges(360, 1.5f);
+  auto scan = createFakeLaserScan(ranges);
+  
+  // Process scan - IDLE should transition to SEARCH when valid scan received
+  controller->processLaserScan(scan);
+
+  // Should transition to SEARCH (not remain IDLE)
+  EXPECT_EQ(controller->getCurrentStateName(), "SEARCH");
+
+  // SEARCH state should produce valid velocity command
+  auto cmd_vel = controller->getVelocityCommand();
+  EXPECT_TRUE(std::isfinite(cmd_vel.linear.x));
+  EXPECT_TRUE(std::isfinite(cmd_vel.angular.z));
+}
+
+// =============================================================================
+// TEST 16: TestAllStates_SearchState
+// =============================================================================
+/**
+ * @brief Test SearchState behavior
+ */
+TEST_F(HiveControllerTest, TestAllStates_SearchState) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Should start in SEARCH state
+  EXPECT_EQ(controller->getCurrentStateName(), "SEARCH");
+  
+  // Create scan with clear path
+  std::vector<float> clear_ranges(360, 2.0f);
+  auto scan = createFakeLaserScan(clear_ranges);
+  
+  controller->processLaserScan(scan);
+  auto cmd_vel = controller->getVelocityCommand();
+  
+  // Should generate movement command
+  EXPECT_TRUE(std::isfinite(cmd_vel.linear.x));
+  EXPECT_TRUE(std::isfinite(cmd_vel.angular.z));
+}
+
+// =============================================================================
+// TEST 17: TestCoordinationState_Clockwise
+// =============================================================================
+/**
+ * @brief Test CoordinationState with clockwise rotation
+ */
+TEST_F(HiveControllerTest, TestCoordinationState_Clockwise) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Create clockwise coordination state
+  auto coord_state = std::make_shared<hive_control::CoordinationState>(true);
+  controller->setState(coord_state);
+  
+  std::vector<float> ranges(360, 1.0f);
+  auto scan = createFakeLaserScan(ranges);
+  controller->processLaserScan(scan);
+  
+  auto cmd_vel = controller->getVelocityCommand();
+  EXPECT_TRUE(std::isfinite(cmd_vel.linear.x));
+  EXPECT_TRUE(std::isfinite(cmd_vel.angular.z));
+}
+
+// =============================================================================
+// TEST 18: TestCoordinationState_CounterClockwise
+// =============================================================================
+/**
+ * @brief Test CoordinationState with counterclockwise rotation
+ */
+TEST_F(HiveControllerTest, TestCoordinationState_CounterClockwise) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Create counterclockwise coordination state
+  auto coord_state = std::make_shared<hive_control::CoordinationState>(false);
+  controller->setState(coord_state);
+  
+  std::vector<float> ranges(360, 1.0f);
+  auto scan = createFakeLaserScan(ranges);
+  controller->processLaserScan(scan);
+  
+  auto cmd_vel = controller->getVelocityCommand();
+  EXPECT_TRUE(std::isfinite(cmd_vel.linear.x));
+  EXPECT_TRUE(std::isfinite(cmd_vel.angular.z));
+  
+  // Compare with clockwise - should have opposite angular velocity sign
+  auto coord_cw = std::make_shared<hive_control::CoordinationState>(true);
+  controller->setState(coord_cw);
+  controller->processLaserScan(scan);
+  auto cmd_cw = controller->getVelocityCommand();
+  
+  // Angular velocities should have opposite signs (or at least be different)
+  if (std::abs(cmd_vel.angular.z) > 0.01 && std::abs(cmd_cw.angular.z) > 0.01) {
+    EXPECT_NE(std::signbit(cmd_vel.angular.z), std::signbit(cmd_cw.angular.z));
+  }
+}
+
+// =============================================================================
+// TEST 19: TestConvergenceState_WithScan
+// =============================================================================
+/**
+ * @brief Test ConvergenceState with scan data
+ */
+TEST_F(HiveControllerTest, TestConvergenceState_WithScan) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  auto conv_state = std::make_shared<hive_control::ConvergenceState>();
+  controller->setState(conv_state);
+  EXPECT_EQ(controller->getCurrentStateName(), "CONVERGENCE");
+  
+  std::vector<float> ranges(360, 1.5f);
+  auto scan = createFakeLaserScan(ranges);
+  controller->processLaserScan(scan);
+  
+  auto cmd_vel = controller->getVelocityCommand();
+  EXPECT_TRUE(std::isfinite(cmd_vel.linear.x));
+  EXPECT_TRUE(std::isfinite(cmd_vel.angular.z));
+}
+
+// =============================================================================
+// TEST 20: TestConvergenceState_WithoutScan
+// =============================================================================
+/**
+ * @brief Test ConvergenceState without scan data
+ */
+TEST_F(HiveControllerTest, TestConvergenceState_WithoutScan) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  auto conv_state = std::make_shared<hive_control::ConvergenceState>();
+  controller->setState(conv_state);
+  
+  // Get command without processing scan
+  auto cmd_vel = controller->getVelocityCommand();
+  EXPECT_TRUE(std::isfinite(cmd_vel.linear.x));
+  EXPECT_TRUE(std::isfinite(cmd_vel.angular.z));
+}
+
+// =============================================================================
+// TEST 21: TestNamespaceParsing_VariousFormats
+// =============================================================================
+/**
+ * @brief Test namespace parsing with various formats
+ */
+TEST_F(HiveControllerTest, TestNamespaceParsing_VariousFormats) {
+  // Test different namespace formats
+  auto c1 = std::make_shared<hive_control::HiveController>("tb1");
+  auto c2 = std::make_shared<hive_control::HiveController>("/tb2");
+  auto c3 = std::make_shared<hive_control::HiveController>("tb3");
+  auto c4 = std::make_shared<hive_control::HiveController>("robot4");
+  auto c5 = std::make_shared<hive_control::HiveController>("");
+  
+  // All should initialize successfully
+  EXPECT_NE(c1, nullptr);
+  EXPECT_NE(c2, nullptr);
+  EXPECT_NE(c3, nullptr);
+  EXPECT_NE(c4, nullptr);
+  EXPECT_NE(c5, nullptr);
+  
+  // Check rotation directions based on ID
+  EXPECT_TRUE(c1->isClockwise());   // ID 1 = odd = clockwise
+  EXPECT_FALSE(c2->isClockwise()); // ID 2 = even = counterclockwise
+  EXPECT_TRUE(c3->isClockwise());   // ID 3 = odd = clockwise
+}
+
+// =============================================================================
+// TEST 22: TestBatteryLevel_SetterGetter
+// =============================================================================
+/**
+ * @brief Test battery level setter and getter
+ */
+TEST_F(HiveControllerTest, TestBatteryLevel_SetterGetter) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Default should be 1.0 (full)
+  EXPECT_DOUBLE_EQ(controller->getBatteryLevel(), 1.0);
+  
+  // Set various levels
+  controller->setBatteryLevel(0.75);
+  EXPECT_DOUBLE_EQ(controller->getBatteryLevel(), 0.75);
+  
+  controller->setBatteryLevel(0.5);
+  EXPECT_DOUBLE_EQ(controller->getBatteryLevel(), 0.5);
+  
+  controller->setBatteryLevel(0.25);
+  EXPECT_DOUBLE_EQ(controller->getBatteryLevel(), 0.25);
+  
+  controller->setBatteryLevel(0.0);
+  EXPECT_DOUBLE_EQ(controller->getBatteryLevel(), 0.0);
+}
+
+// =============================================================================
+// TEST 23: TestRotationDirection_Toggle
+// =============================================================================
+/**
+ * @brief Test rotation direction toggle
+ */
+TEST_F(HiveControllerTest, TestRotationDirection_Toggle) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Get initial direction
+  bool initial = controller->isClockwise();
+  
+  // Toggle multiple times
+  controller->toggleRotationDirection();
+  EXPECT_NE(controller->isClockwise(), initial);
+  
+  controller->toggleRotationDirection();
+  EXPECT_EQ(controller->isClockwise(), initial);
+  
+  controller->toggleRotationDirection();
+  EXPECT_NE(controller->isClockwise(), initial);
+}
+
+// =============================================================================
+// TEST 24: TestStateName_AllStates
+// =============================================================================
+/**
+ * @brief Test state name retrieval for all states
+ */
+TEST_F(HiveControllerTest, TestStateName_AllStates) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Test all state names
+  controller->setState(std::make_shared<hive_control::IdleState>());
+  EXPECT_EQ(controller->getCurrentStateName(), "IDLE");
+  
+  controller->setState(std::make_shared<hive_control::SearchState>());
+  EXPECT_EQ(controller->getCurrentStateName(), "SEARCH");
+  
+  controller->setState(std::make_shared<hive_control::CoordinationState>(true));
+  EXPECT_EQ(controller->getCurrentStateName(), "COORDINATION");
+  
+  controller->setState(std::make_shared<hive_control::ConvergenceState>());
+  EXPECT_EQ(controller->getCurrentStateName(), "CONVERGENCE");
+}
+
+// =============================================================================
+// TEST 25: TestScanProcessing_MultipleScans
+// =============================================================================
+/**
+ * @brief Test processing multiple scans in sequence
+ */
+TEST_F(HiveControllerTest, TestScanProcessing_MultipleScans) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Process multiple scans with different ranges
+  for (int i = 0; i < 10; ++i) {
+    std::vector<float> ranges(360, 1.0f + i * 0.1f);
+    auto scan = createFakeLaserScan(ranges);
+    controller->processLaserScan(scan);
+    
+    auto cmd = controller->getVelocityCommand();
+    EXPECT_TRUE(std::isfinite(cmd.linear.x));
+    EXPECT_TRUE(std::isfinite(cmd.angular.z));
+  }
+}
+
+// =============================================================================
+// TEST 26: TestScanProcessing_InvalidRanges
+// =============================================================================
+/**
+ * @brief Test processing scans with invalid range values
+ */
+TEST_F(HiveControllerTest, TestScanProcessing_InvalidRanges) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Create scan with mix of valid and invalid ranges
+  std::vector<float> ranges(360);
+  for (size_t i = 0; i < ranges.size(); ++i) {
+    if (i % 10 == 0) {
+      ranges[i] = std::numeric_limits<float>::quiet_NaN();
+    } else if (i % 10 == 1) {
+      ranges[i] = std::numeric_limits<float>::infinity();
+    } else {
+      ranges[i] = 1.5f;
+    }
+  }
+  
+  auto scan = createFakeLaserScan(ranges);
+  controller->processLaserScan(scan);
+  
+  auto cmd = controller->getVelocityCommand();
+  EXPECT_TRUE(std::isfinite(cmd.linear.x));
+  EXPECT_TRUE(std::isfinite(cmd.angular.z));
+}
+
 // Note: main() is provided automatically by ament_add_gtest via gtest_main
 

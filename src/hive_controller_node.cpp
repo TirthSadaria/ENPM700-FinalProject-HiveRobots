@@ -26,6 +26,7 @@
 
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "hive_control/hive_controller.hpp"
@@ -57,14 +58,16 @@ HiveControllerNode::HiveControllerNode()
     } catch (...) {
       robot_id = 1;
     }
-    RCLCPP_INFO(this->get_logger(), "Initialized Robot %d (Clockwise: %s)", 
-                robot_id, controller_->isClockwise() ? "YES" : "NO");
+    robot_id_ = robot_id;  // Store for use in callbacks
+    RCLCPP_INFO(this->get_logger(), "Robot %d initialized (Clockwise: %s, Namespace: %s)", 
+                robot_id_, controller_->isClockwise() ? "YES" : "NO", namespace_str.c_str());
 
     // Declare parameters for topic names (for flexibility / multi-robot use)
     // Use relative names (not absolute) so they work with namespaces
     this->declare_parameter<std::string>("cmd_vel_topic", "cmd_vel");
     this->declare_parameter<std::string>("scan_topic", "scan");
     this->declare_parameter<std::string>("map_topic", "map");
+    this->declare_parameter<std::string>("odom_topic", "odom");
     this->declare_parameter<bool>("enable_map_completion", true);
 
     const std::string cmd_vel_topic =
@@ -73,6 +76,8 @@ HiveControllerNode::HiveControllerNode()
       this->get_parameter("scan_topic").as_string();
     const std::string map_topic =
       this->get_parameter("map_topic").as_string();
+    const std::string odom_topic =
+      this->get_parameter("odom_topic").as_string();
     enable_map_completion_ =
       this->get_parameter("enable_map_completion").as_bool();
 
@@ -95,6 +100,11 @@ HiveControllerNode::HiveControllerNode()
     map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
       map_topic, 10,
       std::bind(&HiveControllerNode::mapCallback, this, std::placeholders::_1));
+
+    // Subscribe to odometry for position-based stuck detection
+    odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+      odom_topic, 10,
+      std::bind(&HiveControllerNode::odomCallback, this, std::placeholders::_1));
 
     RCLCPP_INFO(this->get_logger(), "Subscribing to: %s (will resolve to namespace)", scan_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "Publishing to: %s (will resolve to namespace)", cmd_vel_topic.c_str());
@@ -136,7 +146,8 @@ void HiveControllerNode::laserCallback(const sensor_msgs::msg::LaserScan::Shared
     static std::string last_state = "";
     const std::string current_state = controller_->getCurrentStateName();
     if (current_state != last_state) {
-      RCLCPP_INFO(this->get_logger(), "State: %s", current_state.c_str());
+      RCLCPP_INFO(this->get_logger(), "[Robot %d] State transition: %s -> %s", 
+                  robot_id_, last_state.c_str(), current_state.c_str());
       last_state = current_state;
     }
     
@@ -144,10 +155,11 @@ void HiveControllerNode::laserCallback(const sensor_msgs::msg::LaserScan::Shared
     static int log_counter = 0;
     if (log_counter % 100 == 0) {
       RCLCPP_INFO(this->get_logger(), 
-                  "Status - State: %s, Battery: %.2f, Scan valid: %s", 
+                  "[Robot %d] Status - State: %s, Battery: %.2f%%, Valid scans: %zu/%zu", 
+                  robot_id_,
                   current_state.c_str(),
-                  controller_->getBatteryLevel(),
-                  (msg && !msg->ranges.empty()) ? "YES" : "NO");
+                  controller_->getBatteryLevel() * 100.0,
+                  valid_ranges, msg->ranges.size());
     }
     log_counter++;
     
@@ -166,6 +178,14 @@ void HiveControllerNode::laserCallback(const sensor_msgs::msg::LaserScan::Shared
     }
   }
 
+void HiveControllerNode::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
+{
+  // Update the controller with the latest odometry for position-based stuck detection
+  if (controller_ && msg) {
+    controller_->setCurrentOdometry(msg);
+  }
+}
+
 void HiveControllerNode::mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
   {
     latest_map_ = msg;
@@ -175,7 +195,7 @@ void HiveControllerNode::mapCallback(const nav_msgs::msg::OccupancyGrid::SharedP
     }
     
     if (enable_map_completion_ && msg && !mapping_complete_) {
-      // Improved map completion detection: Monitor growth rate instead of unknown percentage
+      // Map completion detection: Monitor growth rate instead of unknown percentage
       // This detects when exploration stops (no new areas discovered)
       
       // Count known cells (not unknown, i.e., not -1)
@@ -288,8 +308,8 @@ void HiveControllerNode::timerCallback()
     cmd_count++;
     if (cmd.linear.x != 0.0 || cmd.angular.z != 0.0) {
       if (cmd_count % 10 == 0) {  // Log every 10th command to avoid spam
-        RCLCPP_INFO(this->get_logger(), "Publishing cmd: linear.x=%.2f m/s, angular.z=%.2f rad/s", 
-                     cmd.linear.x, cmd.angular.z);
+        RCLCPP_INFO(this->get_logger(), "[Robot %d] Velocity: v=%.2f m/s, omega=%.2f rad/s", 
+                     robot_id_, cmd.linear.x, cmd.angular.z);
       }
     }
     

@@ -4,7 +4,8 @@
         <device reference="LDS-01" type="Lidar">
             <ros>
                 <enabled>true</enabled>
-                <updateRate>5</updateRate>
+                <updateRate>3</updateRate>
+                <!-- Reduced from 5 to 3 Hz to prevent queue overflow -->
                 <!-- Use absolute topic name - driver publishes to /scan globally -->
                 <!-- Launch file will remap this to namespaced version -->
                 <topicName>/scan</topicName>

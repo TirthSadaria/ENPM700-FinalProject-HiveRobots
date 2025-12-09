@@ -15,11 +15,15 @@
 /**
  * @file scan_frame_remapper.cpp
  * @brief Remaps laser scan frame_id and corrects angle orientation for SLAM compatibility
- * 
- * This node performs two critical functions:
+ *
+ * This node performs two essential functions:
  * 1. Frame ID remapping: Changes LDS-01 to {namespace}/LDS-01 for multi-robot SLAM
  * 2. Angle normalization: Corrects Webots inverted lidar angles to standard ROS format
- * 
+ *
+ * Webots lidar sensors output scans with inverted angle conventions (angle_min=π,
+ * angle_max=-π, negative increment), which causes issues with SLAM algorithms
+ * that expect standard ROS conventions (angle_min=-π, angle_max=π, positive increment).
+ *
  * @author Shreya Kalyanaraman, Tirth Sadaria
  */
 
@@ -101,10 +105,9 @@ private:
     // Normalize scan angles for SLAM compatibility
     // Webots lidar outputs: angle_min=π, angle_max=-π, angle_increment=-0.017 (inverted)
     // SLAM expects: angle_min=-π, angle_max=π, angle_increment=+0.017 (standard)
-    // 
+    //
     // SLAM toolbox calculates expected_count = (angle_max - angle_min) / angle_increment
-    // If angle_increment is negative, this causes integer overflow
-    // Therefore, we ensure angle_increment is always positive
+    // Negative angle_increment causes calculation errors, so we ensure it's always positive
     
     bool needs_reversal = (remapped_msg->angle_increment < 0);
     

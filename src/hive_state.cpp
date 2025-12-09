@@ -13,7 +13,12 @@
 // limitations under the License.
 /**
  * @file hive_state.cpp
- * @brief Implementation of HiveState and concrete states
+ * @brief Implementation of HiveState and concrete state classes
+ *
+ * Implements the State design pattern for robot behavior management.
+ * States include: IdleState, SearchState, CoordinationState, and ConvergenceState.
+ * Each state implements autonomous exploration, obstacle avoidance, and coordination logic.
+ *
  * @author Shreya Kalyanaraman, Tirth Sadaria
  */
 #include "hive_control/hive_state.hpp"
@@ -46,13 +51,17 @@ geometry_msgs::msg::Twist IdleState::getVelocityCommand(HiveController * /* cont
 }
 
 // ================= SearchState =================
-// Static random number generator for turn direction randomization
-// This prevents the "lemming effect" where all robots turn the same direction
+/**
+ * @brief Random number generators for turn direction randomization
+ *
+ * Prevents the "lemming effect" where all robots turn in the same direction,
+ * which causes robots to bunch together. Randomization ensures diverse
+ * exploration patterns across the robot swarm.
+ */
 static std::random_device rd;
 static std::mt19937 gen(rd());
 static std::uniform_int_distribution<> turn_direction_dist(0, 1);  // 0 = left, 1 = right
 static std::uniform_int_distribution<> persistence_dist(10, 30);  // Persist for 10-30 cycles
-// Turn duration: 10-20 cycles = 1.0-2.0 seconds at ~10Hz (100ms per cycle)
 static std::uniform_int_distribution<> turn_duration_dist(10, 20);  // 1.0-2.0 seconds
 
 SearchState::SearchState() 
@@ -76,15 +85,16 @@ void SearchState::handle(
     return;
   }
   
-  // Periodic coordination (not convergence!) - helps avoid robot conflicts
-  // Only coordinate occasionally, not every time (every 200 iterations = ~20 seconds)
+  // Periodic coordination helps avoid robot conflicts
+  // Triggers occasionally (after 50 iterations) to prevent robots from
+  // interfering with each other during exploration
   if (needsCoordination() && search_duration_counter_ > 50) {
     context->setState(std::make_shared<CoordinationState>(context->isClockwise()));
     return;
   }
-  
-  // Stay in SEARCH state for exploration - don't transition to convergence based on time
-  // The robot should stay in SEARCH state and use collision avoidance logic
+
+  // Remain in SEARCH state for continuous exploration
+  // Robots use collision avoidance and frontier detection while exploring
 }
 
 geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * context)
@@ -104,7 +114,7 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
     return cmd;
   }
   
-  // IMPROVED: Use map data for frontier-based exploration
+  // Use map data for frontier-based exploration
   // Find unmapped areas (frontiers) in the map and steer toward them
   auto map = context->getCurrentMap();
   double frontier_angle = 0.0;
@@ -167,22 +177,58 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
   // Use min_valid_range for collision detection
   double min_distance = min_valid_range;
   
-  // Improved collision avoidance thresholds
-  const double too_close_threshold = 0.5;  // 50cm - too close to wall (back up immediately)
-  const double obstacle_threshold = 0.8;  // 80cm - obstacle ahead (turn before hitting)
-  const double safe_distance = 1.2;  // 1.2m - preferred distance from walls
+  // Collision avoidance thresholds (in meters)
+  const double too_close_threshold = 0.5;  // 50cm - too close, back up immediately
+  const double obstacle_threshold = 0.8;   // 80cm - obstacle ahead, turn before hitting
+  const double safe_distance = 1.2;        // 1.2m - preferred distance from walls
+
+  // Stuck detection uses multiple checks for reliability:
+  // 1. Position-based: Check if robot has actually moved (using odometry)
+  // 2. Obstacle pattern: Detect if robot sees same distances repeatedly
+  // 3. Proximity check: Detect if robot is very close to wall
   
-  // Stuck detection: monitor if robot hasn't moved significantly
-  const double stuck_distance_threshold = 0.1;  // 10cm threshold for detecting lack of movement
-  if (std::abs(min_distance - last_min_distance_) < stuck_distance_threshold) {
+  bool position_stuck = false;
+  if (context) {
+    auto odom = context->getCurrentOdometry();
+    if (odom) {
+      double current_x = odom->pose.pose.position.x;
+      double current_y = odom->pose.pose.position.y;
+      
+      if (has_last_position_) {
+        // Calculate distance moved since last check
+        double dx = current_x - last_position_x_;
+        double dy = current_y - last_position_y_;
+        double distance_moved = std::sqrt(dx * dx + dy * dy);
+        
+        // If robot hasn't moved enough, it's stuck
+        if (distance_moved < MIN_MOVEMENT_DISTANCE) {
+          position_stuck = true;
+        }
+      }
+      
+      // Update last position
+      last_position_x_ = current_x;
+      last_position_y_ = current_y;
+      has_last_position_ = true;
+    }
+  }
+  
+  // Obstacle-based checks (fallback if odometry not available)
+  const double stuck_distance_threshold = 0.15;  // 15cm threshold (increased for better detection)
+  bool same_obstacle_pattern = (std::abs(min_distance - last_min_distance_) < stuck_distance_threshold);
+  bool very_close_to_wall = (min_distance < too_close_threshold);
+  
+  // Combine checks: stuck if position-based OR (obstacle pattern AND very close to wall)
+  // Position-based detection is most reliable, but we keep obstacle checks as fallback
+  if (position_stuck || (same_obstacle_pattern && very_close_to_wall)) {
     stuck_counter_++;
   } else {
     stuck_counter_ = 0;  // Reset if we're making progress
   }
   last_min_distance_ = min_distance;
   
-  // If stuck for too long, force aggressive recovery
-  if (stuck_counter_ > STUCK_THRESHOLD) {
+  // If stuck for too long, force aggressive recovery (reduced threshold for faster response)
+  if (stuck_counter_ > (STUCK_THRESHOLD / 2)) {  // Faster stuck detection (2.5s instead of 5s)
     stuck_counter_ = 0;  // Reset counter
     stuck_recovery_count_++;  // Track how many times we've tried to recover
     
@@ -324,7 +370,7 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
   
   if (obstacle_ahead) {
     // Obstacle detected ahead - turn toward best direction smoothly
-    // IMPROVED: Prefer frontier direction if available when stuck
+    // Prefer frontier direction if available, otherwise use best lidar direction
     double best_angle = angle_min + best_direction_idx * angle_increment;
     
     if (has_frontier) {
@@ -363,8 +409,8 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
     // Adjust speed based on distance to nearest obstacle (smooth deceleration)
     double speed_factor = std::min(min_distance / safe_distance, 1.0);
     cmd.linear.x = 0.15 * speed_factor;  // Max 0.15 m/s (reduced for safe wheel vel)
-    
-    // IMPROVED: Prefer frontier direction if available, otherwise use best lidar direction
+
+    // Prefer frontier direction if available, otherwise use best lidar direction
     if (has_frontier) {
       // Use map-based frontier direction (stronger bias toward unmapped areas)
       cmd.angular.z = std::clamp(frontier_angle * 0.6, -0.3, 0.3);  // Turn toward frontier
@@ -400,20 +446,20 @@ bool SearchState::findFrontierDirection(
     return false;
   }
   
-  // Improved frontier detection: Find unknown cells and determine best direction
-  // This helps robots explore unmapped areas instead of getting stuck
+  // Frontier detection: Find unknown cells and determine best direction
+  // This helps robots explore unmapped areas instead of revisiting known regions
   const int width = map->info.width;
   const int height = map->info.height;
   const double resolution = map->info.resolution;
-  
+
   if (width <= 0 || height <= 0 || resolution <= 0.0) {
     return false;
   }
-  
-  // IMPROVED: Use a simpler, more robust frontier detection
-  // Instead of assuming robot position, we:
+
+  // Frontier detection algorithm:
   // 1. Find all frontiers (unknown cells adjacent to known free cells) in the map
   // 2. Use lidar to determine which direction has clear path + unknown areas
+  // 3. Return the angle toward the best frontier direction
   // 3. This works even when robot has moved from origin
   
   // Step 1: Find all frontier cells (unknown cells adjacent to known free cells)

@@ -30,6 +30,7 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include "hive_control/hive_controller.hpp"
 
 /**
@@ -69,6 +70,11 @@ private:
   void mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
 
   /**
+   * @brief Callback for odometry messages (for position-based stuck detection)
+   */
+  void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
+
+  /**
    * @brief Save the merged map as PNG file when mapping is complete
    */
   void saveMapAsPNG();
@@ -90,8 +96,14 @@ private:
   /// Subscriber for map (for frontier exploration)
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
   
+  /// Subscriber for odometry (for position-based stuck detection)
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+  
   /// Latest map data
   nav_msgs::msg::OccupancyGrid::SharedPtr latest_map_;
+  
+  /// Robot ID for logging
+  int robot_id_ = 1;
   
   /// Map completion detection (growth rate monitoring)
   bool mapping_complete_ = false;
