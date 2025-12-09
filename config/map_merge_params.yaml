@@ -7,12 +7,13 @@ map_merge:
     # General Parameters  
     # ==========================================
     merging_rate: 2.0           # Hz - how often to merge maps
-    discovery_rate: 1.0         # Hz - how often to discover new robots (faster discovery)
+    discovery_rate: 1.0         # Hz - how often to discover new robots
     estimation_rate: 1.0        # Hz - pose estimation rate
     
-    # Try estimation mode first to verify discovery works
-    known_init_poses: false
-    estimation_confidence: 0.1  # Very low threshold to accept matches
+    # USE KNOWN POSES - more reliable than feature estimation
+    # Robot spawn positions are known from generate_world.py
+    known_init_poses: true
+    estimation_confidence: 1.0  # Not used when known_init_poses=true
     
     # Topic names (without namespace)
     robot_map_topic: "map"
@@ -20,7 +21,12 @@ map_merge:
     merged_map_topic: "map"
     world_frame: "world"
     
-    # Robot namespace prefix - map_merge looks for tb1, tb2, etc.
-    # CRITICAL: This should match the namespace prefix of your robots
+    # Empty string discovers all robot namespaces automatically
     robot_namespace: ""
+    
+    # ==========================================
+    # Initial Poses for Each Robot
+    # Must match SPAWN_POSITIONS in generate_world.py
+    # Format: /<robot_ns>/map_merge/init_pose_x, y, z, yaw
+    # ==========================================
 

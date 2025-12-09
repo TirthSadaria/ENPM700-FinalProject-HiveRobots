@@ -217,9 +217,24 @@ def launch_setup(context, *args, **kwargs):
         "map_merge_params.yaml"
     )
     
-    # Map merge node - uses estimation mode with very low confidence threshold
-    # This allows map_merge to discover robots and merge maps even with weak feature matches
+    # Build init_pose parameters for known_init_poses mode
     # Reference: https://github.com/robo-friends/m-explore-ros2
+    # Format: <robot_ns>/map_merge/init_pose_x, y, z, yaw
+    init_pose_params = {}
+    for i in range(1, num_robots + 1):
+        robot_ns = f"tb{i}"
+        if i <= len(SPAWN_POSITIONS):
+            x, y, z = SPAWN_POSITIONS[i - 1]
+        else:
+            x, y, z = (0.0, 0.0, 0.0)
+        # These params tell map_merge exactly where each robot started
+        init_pose_params[f"{robot_ns}/map_merge/init_pose_x"] = float(x)
+        init_pose_params[f"{robot_ns}/map_merge/init_pose_y"] = float(y)
+        init_pose_params[f"{robot_ns}/map_merge/init_pose_z"] = float(z)
+        init_pose_params[f"{robot_ns}/map_merge/init_pose_yaw"] = 0.0
+    
+    # Map merge node with known initial poses
+    # This directly places each robot's map at its spawn position - no feature estimation needed
     map_merge_node = Node(
         package="multirobot_map_merge",
         executable="map_merge",
@@ -229,7 +244,9 @@ def launch_setup(context, *args, **kwargs):
             {
                 "use_sim_time": use_sim_time,
                 "merged_map_topic": "map_merged",
+                "known_init_poses": True,  # Use known poses, not estimation
             },
+            init_pose_params,  # Pass spawn coordinates for each robot
         ],
         output="screen",
         condition=IfCondition(enable_map_merge),
