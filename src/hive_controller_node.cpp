@@ -29,32 +29,11 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "hive_control/hive_controller.hpp"
+#include "hive_control/hive_controller_node.hpp"
 
 using std::chrono_literals::operator""ms;
 
-/**
- * @struct MapGrowthData
- * @brief Data structure for tracking map growth over time
- */
-struct MapGrowthData {
-  int known_cell_count = 0;
-  rclcpp::Time timestamp;
-};
-
-/**
- * @class HiveControllerNode
- * @brief ROS2 node implementing robot behavior via HiveContext
- *
- * This node subscribes to laser scan data and publishes velocity commands
- * by delegating decision logic to the State-pattern-based HiveContext.
- */
-class HiveControllerNode : public rclcpp::Node
-{
-public:
-  /**
-   * @brief Constructor - sets up publishers, subscribers, and timer
-   */
-  HiveControllerNode()
+HiveControllerNode::HiveControllerNode()
   : Node("hive_controller_node")
   {
     // Get namespace to pass to controller for robot ID extraction
@@ -360,14 +339,3 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
 };
 
-/**
- * @brief Main function
- */
-int main(int argc, char ** argv)
-{
-  rclcpp::init(argc, argv);
-  auto node = std::make_shared<HiveControllerNode>();
-  rclcpp::spin(node);
-  rclcpp::shutdown();
-  return 0;
-}
