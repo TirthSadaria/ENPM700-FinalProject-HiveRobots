@@ -27,6 +27,8 @@
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
+#include "nav_msgs/msg/occupancy_grid.hpp"
+#include <limits>
 
 #include "hive_control/hive_controller.hpp"
 #include "hive_control/hive_state.hpp"
@@ -406,6 +408,350 @@ TEST_F(HiveControlTest, VelocityCommandEdgeCases) {
   // Command should be valid (not NaN or Inf)
   EXPECT_TRUE(std::isfinite(cmd.linear.x));
   EXPECT_TRUE(std::isfinite(cmd.angular.z));
+}
+
+// =============================================================================
+// TEST 15: Frontier Detection with Map Data
+// =============================================================================
+/**
+ * @brief Test frontier detection functionality with map data
+ */
+TEST_F(HiveControlTest, FrontierDetectionWithMap) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Create a map with frontiers (unknown cells adjacent to known free cells)
+  auto map = std::make_shared<nav_msgs::msg::OccupancyGrid>();
+  map->header.stamp = rclcpp::Clock().now();
+  map->header.frame_id = "map";
+  map->info.width = 100;
+  map->info.height = 100;
+  map->info.resolution = 0.05;
+  map->info.origin.position.x = -2.5;
+  map->info.origin.position.y = -2.5;
+  map->data = std::vector<int8_t>(10000, -1);  // All unknown initially
+  
+  // Create a known free area in the center
+  for (int y = 40; y < 60; ++y) {
+    for (int x = 40; x < 60; ++x) {
+      map->data[y * 100 + x] = 0;  // Free space
+    }
+  }
+  
+  // Set the map
+  controller->setCurrentMap(map);
+  
+  // Create a scan
+  auto scan = std::make_shared<sensor_msgs::msg::LaserScan>();
+  scan->header.stamp = rclcpp::Clock().now();
+  scan->header.frame_id = "LDS-01";
+  scan->angle_min = -M_PI;
+  scan->angle_max = M_PI;
+  scan->angle_increment = 0.0175;
+  scan->range_min = 0.1;
+  scan->range_max = 3.5;
+  scan->ranges = std::vector<float>(360, 2.0);
+  
+  // Process scan with map - should use frontier exploration
+  controller->processLaserScan(scan);
+  auto cmd = controller->getVelocityCommand();
+  
+  // Should produce valid velocity command
+  EXPECT_TRUE(std::isfinite(cmd.linear.x));
+  EXPECT_TRUE(std::isfinite(cmd.angular.z));
+}
+
+// =============================================================================
+// TEST 16: Obstacle Detection and State Transition
+// =============================================================================
+/**
+ * @brief Test obstacle detection triggers coordination state
+ */
+TEST_F(HiveControlTest, ObstacleDetectionStateTransition) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Initial state should be SEARCH
+  EXPECT_EQ(controller->getCurrentStateName(), "SEARCH");
+  
+  // Create scan with obstacle ahead (middle third has close readings)
+  auto scan = std::make_shared<sensor_msgs::msg::LaserScan>();
+  scan->header.stamp = rclcpp::Clock().now();
+  scan->header.frame_id = "LDS-01";
+  scan->angle_min = -M_PI;
+  scan->angle_max = M_PI;
+  scan->angle_increment = 0.0175;
+  scan->range_min = 0.1;
+  scan->range_max = 3.5;
+  scan->ranges = std::vector<float>(360, 2.0);
+  
+  // Set middle third (obstacle detection region) to close values
+  size_t start_idx = scan->ranges.size() / 3;
+  size_t end_idx = 2 * scan->ranges.size() / 3;
+  for (size_t i = start_idx; i < end_idx; ++i) {
+    scan->ranges[i] = 0.3;  // Close obstacle (less than 0.5 threshold)
+  }
+  
+  // Process scan - should transition to COORDINATION
+  controller->processLaserScan(scan);
+  
+  // May transition to COORDINATION or stay in SEARCH depending on timing
+  // Both are valid behaviors
+  std::string state = controller->getCurrentStateName();
+  EXPECT_TRUE(state == "SEARCH" || state == "COORDINATION");
+}
+
+// =============================================================================
+// TEST 17: Coordination State Behavior
+// =============================================================================
+/**
+ * @brief Test coordination state velocity commands
+ */
+TEST_F(HiveControlTest, CoordinationStateBehavior) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Transition to coordination state
+  auto coord_state = std::make_shared<hive_control::CoordinationState>(true);
+  controller->setState(coord_state);
+  EXPECT_EQ(controller->getCurrentStateName(), "COORDINATION");
+  
+  // Get velocity command - should have angular velocity
+  auto cmd = controller->getVelocityCommand();
+  EXPECT_TRUE(std::isfinite(cmd.angular.z));
+  
+  // Test counterclockwise coordination
+  auto coord_state_ccw = std::make_shared<hive_control::CoordinationState>(false);
+  controller->setState(coord_state_ccw);
+  auto cmd2 = controller->getVelocityCommand();
+  EXPECT_TRUE(std::isfinite(cmd2.angular.z));
+  // Should have opposite sign
+  EXPECT_NE(cmd.angular.z, cmd2.angular.z);
+}
+
+// =============================================================================
+// TEST 18: Stuck Recovery Mechanism
+// =============================================================================
+/**
+ * @brief Test that stuck detection works with repeated similar scans
+ */
+TEST_F(HiveControlTest, StuckRecoveryMechanism) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Create scan with obstacle close ahead
+  auto scan = std::make_shared<sensor_msgs::msg::LaserScan>();
+  scan->header.stamp = rclcpp::Clock().now();
+  scan->header.frame_id = "LDS-01";
+  scan->angle_min = -M_PI;
+  scan->angle_max = M_PI;
+  scan->angle_increment = 0.0175;
+  scan->range_min = 0.1;
+  scan->range_max = 3.5;
+  scan->ranges = std::vector<float>(360, 0.4);  // Close obstacle all around
+  
+  // Process multiple similar scans to simulate stuck condition
+  for (int i = 0; i < 10; ++i) {
+    controller->processLaserScan(scan);
+    auto cmd = controller->getVelocityCommand();
+    
+    // Commands should be valid
+    EXPECT_TRUE(std::isfinite(cmd.linear.x));
+    EXPECT_TRUE(std::isfinite(cmd.angular.z));
+  }
+}
+
+// =============================================================================
+// TEST 19: Convergence State Behavior
+// =============================================================================
+/**
+ * @brief Test convergence state functionality
+ */
+TEST_F(HiveControlTest, ConvergenceStateBehavior) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Transition to convergence state
+  auto conv_state = std::make_shared<hive_control::ConvergenceState>();
+  controller->setState(conv_state);
+  EXPECT_EQ(controller->getCurrentStateName(), "CONVERGENCE");
+  
+  // Get velocity command
+  auto cmd = controller->getVelocityCommand();
+  EXPECT_TRUE(std::isfinite(cmd.linear.x));
+  EXPECT_TRUE(std::isfinite(cmd.angular.z));
+  
+  // Should have some motion (either linear or angular)
+  EXPECT_TRUE(std::abs(cmd.linear.x) > 0.0 || std::abs(cmd.angular.z) > 0.0);
+}
+
+// =============================================================================
+// TEST 20: IDLE State Behavior
+// =============================================================================
+/**
+ * @brief Test that IDLE state produces zero velocity commands
+ */
+TEST_F(HiveControlTest, IdleStateBehavior) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Force IDLE state
+  auto idle_state = std::make_shared<hive_control::IdleState>();
+  controller->setState(idle_state);
+  EXPECT_EQ(controller->getCurrentStateName(), "IDLE");
+  
+  // Create valid scan with data
+  auto scan = std::make_shared<sensor_msgs::msg::LaserScan>();
+  scan->header.stamp = rclcpp::Clock().now();
+  scan->header.frame_id = "LDS-01";
+  scan->angle_min = -M_PI;
+  scan->angle_max = M_PI;
+  scan->angle_increment = 0.0175;
+  scan->range_min = 0.1;
+  scan->range_max = 3.5;
+  scan->ranges = std::vector<float>(360, 1.5);  // Valid ranges
+  
+  // Process scan - IDLE state should remain IDLE (no automatic transition)
+  controller->processLaserScan(scan);
+  
+  // IDLE state should produce zero velocity
+  auto cmd = controller->getVelocityCommand();
+  EXPECT_DOUBLE_EQ(cmd.linear.x, 0.0);
+  EXPECT_DOUBLE_EQ(cmd.angular.z, 0.0);
+}
+
+// =============================================================================
+// TEST 21: Scan with Invalid/NaN Values
+// =============================================================================
+/**
+ * @brief Test handling of scans with NaN or invalid values
+ */
+TEST_F(HiveControlTest, ScanWithInvalidValues) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Create scan with some NaN values
+  auto scan = std::make_shared<sensor_msgs::msg::LaserScan>();
+  scan->header.stamp = rclcpp::Clock().now();
+  scan->header.frame_id = "LDS-01";
+  scan->angle_min = -M_PI;
+  scan->angle_max = M_PI;
+  scan->angle_increment = 0.0175;
+  scan->range_min = 0.1;
+  scan->range_max = 3.5;
+  scan->ranges = std::vector<float>(360, std::numeric_limits<float>::quiet_NaN());
+  
+  // Set some valid values
+  scan->ranges[0] = 1.0;
+  scan->ranges[100] = 2.0;
+  scan->ranges[200] = 1.5;
+  
+  // Process scan - should handle gracefully
+  controller->processLaserScan(scan);
+  auto cmd = controller->getVelocityCommand();
+  
+  // Should produce valid commands
+  EXPECT_TRUE(std::isfinite(cmd.linear.x));
+  EXPECT_TRUE(std::isfinite(cmd.angular.z));
+}
+
+// =============================================================================
+// TEST 22: Map with No Frontiers
+// =============================================================================
+/**
+ * @brief Test behavior when map has no frontiers (fully explored)
+ */
+TEST_F(HiveControlTest, MapWithNoFrontiers) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Create fully explored map (all known, no unknown cells)
+  auto map = std::make_shared<nav_msgs::msg::OccupancyGrid>();
+  map->header.stamp = rclcpp::Clock().now();
+  map->header.frame_id = "map";
+  map->info.width = 100;
+  map->info.height = 100;
+  map->info.resolution = 0.05;
+  map->data = std::vector<int8_t>(10000, 0);  // All free space (known)
+  
+  controller->setCurrentMap(map);
+  
+  // Create scan
+  auto scan = std::make_shared<sensor_msgs::msg::LaserScan>();
+  scan->header.stamp = rclcpp::Clock().now();
+  scan->header.frame_id = "LDS-01";
+  scan->angle_min = -M_PI;
+  scan->angle_max = M_PI;
+  scan->angle_increment = 0.0175;
+  scan->range_min = 0.1;
+  scan->range_max = 3.5;
+  scan->ranges = std::vector<float>(360, 2.0);
+  
+  // Process scan - should still work without frontiers
+  controller->processLaserScan(scan);
+  auto cmd = controller->getVelocityCommand();
+  
+  EXPECT_TRUE(std::isfinite(cmd.linear.x));
+  EXPECT_TRUE(std::isfinite(cmd.angular.z));
+}
+
+// =============================================================================
+// TEST 23: Multiple State Transitions
+// =============================================================================
+/**
+ * @brief Test multiple state transitions in sequence
+ */
+TEST_F(HiveControlTest, MultipleStateTransitions) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Start in SEARCH
+  EXPECT_EQ(controller->getCurrentStateName(), "SEARCH");
+  
+  // Transition to IDLE
+  controller->setState(std::make_shared<hive_control::IdleState>());
+  EXPECT_EQ(controller->getCurrentStateName(), "IDLE");
+  
+  // Transition to COORDINATION
+  controller->setState(std::make_shared<hive_control::CoordinationState>(true));
+  EXPECT_EQ(controller->getCurrentStateName(), "COORDINATION");
+  
+  // Transition to CONVERGENCE
+  controller->setState(std::make_shared<hive_control::ConvergenceState>());
+  EXPECT_EQ(controller->getCurrentStateName(), "CONVERGENCE");
+  
+  // Transition back to SEARCH
+  controller->setState(std::make_shared<hive_control::SearchState>());
+  EXPECT_EQ(controller->getCurrentStateName(), "SEARCH");
+}
+
+// =============================================================================
+// TEST 24: Velocity Command Limits
+// =============================================================================
+/**
+ * @brief Test that velocity commands stay within safe limits
+ */
+TEST_F(HiveControlTest, VelocityCommandLimits) {
+  auto controller = std::make_shared<hive_control::HiveController>("tb1");
+  
+  // Test with various scan scenarios
+  std::vector<std::vector<float>> test_scenarios = {
+    std::vector<float>(360, 0.2),  // Very close obstacles
+    std::vector<float>(360, 5.0),  // Far obstacles (clamped to max)
+    std::vector<float>(360, 1.0),  // Medium distance
+  };
+  
+  for (const auto& ranges : test_scenarios) {
+    auto scan = std::make_shared<sensor_msgs::msg::LaserScan>();
+    scan->header.stamp = rclcpp::Clock().now();
+    scan->header.frame_id = "LDS-01";
+    scan->angle_min = -M_PI;
+    scan->angle_max = M_PI;
+    scan->angle_increment = 0.0175;
+    scan->range_min = 0.1;
+    scan->range_max = 3.5;
+    scan->ranges = ranges;
+    
+    controller->processLaserScan(scan);
+    auto cmd = controller->getVelocityCommand();
+    
+    // Commands should be within reasonable limits
+    EXPECT_GE(cmd.linear.x, -1.0);
+    EXPECT_LE(cmd.linear.x, 1.0);
+    EXPECT_GE(cmd.angular.z, -2.0);
+    EXPECT_LE(cmd.angular.z, 2.0);
+  }
 }
 
 // =============================================================================

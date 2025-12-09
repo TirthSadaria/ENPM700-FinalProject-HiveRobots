@@ -132,6 +132,7 @@ if(BUILD_TESTING)
     rclcpp
     geometry_msgs
     sensor_msgs
+    nav_msgs
   )
   
 endif()
