@@ -1,0 +1,32 @@
+# Multi-Robot Map Merge Configuration
+# Reference: https://github.com/robo-friends/m-explore-ros2
+
+map_merge:
+  ros__parameters:
+    # ==========================================
+    # General Parameters  
+    # ==========================================
+    merging_rate: 2.0           # Hz - how often to merge maps
+    discovery_rate: 1.0         # Hz - how often to discover new robots
+    estimation_rate: 1.0        # Hz - pose estimation rate
+    
+    # USE ESTIMATION MODE - auto-aligns maps using feature matching
+    # More robust than known_init_poses which has parameter format issues
+    known_init_poses: false
+    estimation_confidence: 0.1  # Very low threshold = accept matches faster
+    
+    # Topic names (without namespace)
+    robot_map_topic: "map"
+    robot_map_updates_topic: "map_updates"
+    merged_map_topic: "map"
+    world_frame: "world"
+    
+    # Prefix to match robot namespaces (tb1, tb2, etc.)
+    robot_namespace: "tb"
+    
+    # ==========================================
+    # Initial Poses for Each Robot
+    # Must match SPAWN_POSITIONS in generate_world.py
+    # Format: /<robot_ns>/map_merge/init_pose_x, y, z, yaw
+    # ==========================================
+

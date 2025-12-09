@@ -63,9 +63,6 @@ HiveController::HiveController(const std::string & namespace_str)
   // Use the ID to determine behavior
   // Robot 1: clockwise (true), Robot 2: counterclockwise (false), Robot 3: clockwise (true)...
   clockwise_ = (robot_id % 2 != 0);
-  
-  // Note: Logging would require ROS2 node, so we skip it here
-  // The node can log the robot ID if needed
 }
 
 void HiveController::processLaserScan(
@@ -73,6 +70,26 @@ void HiveController::processLaserScan(
 {
   // Store the latest scan for state classes to access
   latest_scan_ = scan;
+  
+  // Force motion if robot is IDLE but has valid scan
+  // This prevents robots from getting stuck in IDLE state when scan data is available
+  if (current_state_id_ == StateID::IDLE && scan && !scan->ranges.empty()) {
+    // Check if scan has valid data
+    bool has_valid_data = false;
+    for (const auto& range : scan->ranges) {
+      if (std::isfinite(range) && range > scan->range_min && range < scan->range_max) {
+        has_valid_data = true;
+        break;
+      }
+    }
+    
+    // Force transition to SEARCH state if we have valid scan data
+    if (has_valid_data) {
+      // Transition to SEARCH state to begin exploration
+      current_state_ = std::make_shared<SearchState>();
+      current_state_id_ = StateID::EXPLORING;
+    }
+  }
   
   if (current_state_) {
     current_state_->handle(this, scan);

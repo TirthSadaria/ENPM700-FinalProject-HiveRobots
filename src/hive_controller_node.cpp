@@ -63,7 +63,6 @@ public:
     // Initialize HIVE controller context with namespace for robot ID parsing
     controller_ = std::make_unique<hive_control::HiveController>(namespace_str);
     
-    // Log robot ID for debugging
     // Extract robot ID from namespace for logging
     int robot_id = 0;
     try {
@@ -99,7 +98,7 @@ public:
       this->get_parameter("enable_map_completion").as_bool();
 
     // Create publisher for velocity commands with BestEffort QoS
-    // BestEffort prevents blocking when controllers are temporarily unavailable
+    // BestEffort reliability prevents blocking when controllers are temporarily unavailable
     rclcpp::QoS cmd_vel_qos(10);
     cmd_vel_qos.reliability(rclcpp::ReliabilityPolicy::BestEffort);
     cmd_vel_qos.durability(rclcpp::DurabilityPolicy::Volatile);
@@ -167,7 +166,18 @@ private:
       last_state = current_state;
     }
     
-    // Debug: Log scan reception with validation info
+    // Periodic status logging (every 100 scans to avoid spam)
+    static int log_counter = 0;
+    if (log_counter % 100 == 0) {
+      RCLCPP_INFO(this->get_logger(), 
+                  "Status - State: %s, Battery: %.2f, Scan valid: %s", 
+                  current_state.c_str(),
+                  controller_->getBatteryLevel(),
+                  (msg && !msg->ranges.empty()) ? "YES" : "NO");
+    }
+    log_counter++;
+    
+    // Log scan reception statistics
     static int scan_count = 0;
     scan_count++;
     if (scan_count == 1) {
@@ -308,7 +318,7 @@ private:
     
     auto cmd = controller_->getVelocityCommand();
     
-    // Debug: Log velocity commands (INFO level for easier debugging)
+    // Log velocity commands periodically (every 10th command to reduce log spam)
     static int cmd_count = 0;
     cmd_count++;
     if (cmd.linear.x != 0.0 || cmd.angular.z != 0.0) {
@@ -344,7 +354,7 @@ private:
   std::vector<MapGrowthData> map_growth_history_;  // Store history for growth rate calculation
   static constexpr double GROWTH_CHECK_INTERVAL = 30.0;  // Check growth every 30 seconds
   static constexpr double MIN_GROWTH_RATE = 0.01;  // 1% growth threshold
-  static constexpr double MIN_EXPLORATION_TIME = 120.0;  // Minimum 120 seconds (2 minutes) before checking - balanced for coverage and speed
+  static constexpr double MIN_EXPLORATION_TIME = 300.0;  // Minimum 300 seconds (5 minutes) - extended for rescue mission to ensure complete mapping
   
   /// Timer for publishing commands
   rclcpp::TimerBase::SharedPtr timer_;

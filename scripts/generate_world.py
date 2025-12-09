@@ -39,7 +39,7 @@ WorldInfo {{
 }}
 Viewpoint {{
   orientation -0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0944
-  position -1.0 1.0 1.0
+  position 0.0 0.0 8.0
 }}
 TexturedBackground {{
 }}
@@ -60,9 +60,259 @@ RectangleArena {{
     metalness 0
   }}
 }}
+
+# ============================================
+# OBSTACLES - Added for SLAM feature detection
+# These break the aliasing problem of identical walls
+# ============================================
+
+# Central pillar REMOVED - robot spawn point is at center
+
+# Pillar top-left
+DEF PILLAR_TL Solid {{
+  translation -1.5 1.0 0.25
+  children [
+    Shape {{
+      appearance PBRAppearance {{
+        baseColor 0.8 0.2 0.2
+        roughness 0.8
+        metalness 0.2
+      }}
+      geometry Cylinder {{
+        height 0.5
+        radius 0.12
+      }}
+    }}
+  ]
+  name "pillar_tl"
+  boundingObject Cylinder {{
+    height 0.5
+    radius 0.12
+  }}
+}}
+
+# Pillar top-right
+DEF PILLAR_TR Solid {{
+  translation 1.5 1.0 0.25
+  children [
+    Shape {{
+      appearance PBRAppearance {{
+        baseColor 0.2 0.8 0.2
+        roughness 0.8
+        metalness 0.2
+      }}
+      geometry Cylinder {{
+        height 0.5
+        radius 0.12
+      }}
+    }}
+  ]
+  name "pillar_tr"
+  boundingObject Cylinder {{
+    height 0.5
+    radius 0.12
+  }}
+}}
+
+# Pillar bottom-left
+DEF PILLAR_BL Solid {{
+  translation -1.5 -1.0 0.25
+  children [
+    Shape {{
+      appearance PBRAppearance {{
+        baseColor 0.2 0.2 0.8
+        roughness 0.8
+        metalness 0.2
+      }}
+      geometry Cylinder {{
+        height 0.5
+        radius 0.12
+      }}
+    }}
+  ]
+  name "pillar_bl"
+  boundingObject Cylinder {{
+    height 0.5
+    radius 0.12
+  }}
+}}
+
+# Pillar bottom-right
+DEF PILLAR_BR Solid {{
+  translation 1.5 -1.0 0.25
+  children [
+    Shape {{
+      appearance PBRAppearance {{
+        baseColor 0.8 0.8 0.2
+        roughness 0.8
+        metalness 0.2
+      }}
+      geometry Cylinder {{
+        height 0.5
+        radius 0.12
+      }}
+    }}
+  ]
+  name "pillar_br"
+  boundingObject Cylinder {{
+    height 0.5
+    radius 0.12
+  }}
+}}
+
+# Box obstacle 1 (near left wall)
+DEF BOX1 Solid {{
+  translation -2.2 0.5 0.15
+  children [
+    Shape {{
+      appearance PBRAppearance {{
+        baseColor 0.6 0.4 0.2
+        roughness 0.9
+        metalness 0.1
+      }}
+      geometry Box {{
+        size 0.4 0.3 0.3
+      }}
+    }}
+  ]
+  name "box1"
+  boundingObject Box {{
+    size 0.4 0.3 0.3
+  }}
+}}
+
+# Box obstacle 2 (near right wall)
+DEF BOX2 Solid {{
+  translation 2.2 -0.5 0.15
+  children [
+    Shape {{
+      appearance PBRAppearance {{
+        baseColor 0.4 0.6 0.2
+        roughness 0.9
+        metalness 0.1
+      }}
+      geometry Box {{
+        size 0.3 0.4 0.3
+      }}
+    }}
+  ]
+  name "box2"
+  boundingObject Box {{
+    size 0.3 0.4 0.3
+  }}
+}}
+
+# L-shaped obstacle (top area)
+DEF L_WALL1 Solid {{
+  translation 0.5 1.5 0.2
+  children [
+    Shape {{
+      appearance PBRAppearance {{
+        baseColor 0.3 0.3 0.6
+        roughness 0.8
+        metalness 0.1
+      }}
+      geometry Box {{
+        size 0.8 0.1 0.4
+      }}
+    }}
+  ]
+  name "l_wall1"
+  boundingObject Box {{
+    size 0.8 0.1 0.4
+  }}
+}}
+
+DEF L_WALL2 Solid {{
+  translation 0.85 1.25 0.2
+  children [
+    Shape {{
+      appearance PBRAppearance {{
+        baseColor 0.3 0.3 0.6
+        roughness 0.8
+        metalness 0.1
+      }}
+      geometry Box {{
+        size 0.1 0.6 0.4
+      }}
+    }}
+  ]
+  name "l_wall2"
+  boundingObject Box {{
+    size 0.1 0.6 0.4
+  }}
+}}
+
+# Small pillar array (bottom area) - distinctive pattern
+DEF SMALL_PILLAR1 Solid {{
+  translation -0.5 -1.2 0.15
+  children [
+    Shape {{
+      appearance PBRAppearance {{
+        baseColor 0.9 0.5 0.1
+        roughness 0.7
+        metalness 0.3
+      }}
+      geometry Cylinder {{
+        height 0.3
+        radius 0.08
+      }}
+    }}
+  ]
+  name "small_pillar1"
+  boundingObject Cylinder {{
+    height 0.3
+    radius 0.08
+  }}
+}}
+
+DEF SMALL_PILLAR2 Solid {{
+  translation -0.2 -1.4 0.15
+  children [
+    Shape {{
+      appearance PBRAppearance {{
+        baseColor 0.9 0.5 0.1
+        roughness 0.7
+        metalness 0.3
+      }}
+      geometry Cylinder {{
+        height 0.3
+        radius 0.08
+      }}
+    }}
+  ]
+  name "small_pillar2"
+  boundingObject Cylinder {{
+    height 0.3
+    radius 0.08
+  }}
+}}
+
+DEF SMALL_PILLAR3 Solid {{
+  translation 0.1 -1.2 0.15
+  children [
+    Shape {{
+      appearance PBRAppearance {{
+        baseColor 0.9 0.5 0.1
+        roughness 0.7
+        metalness 0.3
+      }}
+      geometry Cylinder {{
+        height 0.3
+        radius 0.08
+      }}
+    }}
+  ]
+  name "small_pillar3"
+  boundingObject Cylinder {{
+    height 0.3
+    radius 0.08
+  }}
+}}
 """
     
     # Add robots (only up to num_robots)
+    # Include lidar 180° rotation to correct Webots lidar orientation
     for i in range(1, num_robots + 1):
         pos = SPAWN_POSITIONS[(i - 1) % len(SPAWN_POSITIONS)]
         world_content += f"""# Robot {i}
@@ -72,6 +322,8 @@ TurtleBot3Burger {{
   controller "<extern>"
   lidarSlot [
     LDS-01 {{
+      translation 0 0 0
+      rotation 0 0 1 3.14159
       name "LDS-01"
     }}
   ]

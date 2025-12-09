@@ -18,6 +18,7 @@
  */
 #include "hive_control/hive_state.hpp"
 #include "hive_control/hive_controller.hpp"
+#include "rclcpp/rclcpp.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include <algorithm>
 #include <cmath>
@@ -114,18 +115,8 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
     // This helps robots explore unmapped areas instead of getting stuck
     has_frontier = findFrontierDirection(map, scan, frontier_angle);
     
-    // Debug: Log frontier detection (only occasionally to avoid spam)
-    static int frontier_check_count = 0;
-    frontier_check_count++;
-    if (frontier_check_count % 100 == 0) {  // Log every 100th check
-      // Count unknown cells for debugging
-      int unknown_count = 0;
-      for (int8_t cell : map->data) {
-        if (cell == -1) unknown_count++;
-      }
-      // Note: We can't easily log from here without access to logger
-      // But this helps us understand if map is being used
-    }
+    // Frontier detection is performed via findFrontierDirection()
+    // This helps robots explore unmapped areas instead of revisiting known regions
   }
   
   // Find the best direction to move (frontier-based exploration)
@@ -143,7 +134,7 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
     return cmd;
   }
   
-  // Count valid ranges for debugging
+  // Count valid ranges to determine scan quality
   size_t valid_ranges = 0;
   double min_valid_range = scan->range_max;
   double max_valid_range = 0.0;
@@ -181,8 +172,8 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
   const double obstacle_threshold = 0.8;  // 80cm - obstacle ahead (turn before hitting)
   const double safe_distance = 1.2;  // 1.2m - preferred distance from walls
   
-  // FIX: Stuck detection - if robot hasn't moved much, force recovery
-  const double stuck_distance_threshold = 0.1;  // 10cm - if min_distance hasn't changed much, we're stuck
+  // Stuck detection: monitor if robot hasn't moved significantly
+  const double stuck_distance_threshold = 0.1;  // 10cm threshold for detecting lack of movement
   if (std::abs(min_distance - last_min_distance_) < stuck_distance_threshold) {
     stuck_counter_++;
   } else {
@@ -193,19 +184,70 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
   // If stuck for too long, force aggressive recovery
   if (stuck_counter_ > STUCK_THRESHOLD) {
     stuck_counter_ = 0;  // Reset counter
+    stuck_recovery_count_++;  // Track how many times we've tried to recover
+    
+    // If we've tried multiple recoveries without success, enter SUPER STUCK mode
+    if (stuck_recovery_count_ >= SUPER_STUCK_THRESHOLD) {
+      in_super_stuck_recovery_ = true;
+      super_stuck_phase_ = 0;  // Start with spin
+      super_stuck_cycles_ = 60;  // ~6 seconds per phase
+      stuck_recovery_count_ = 0;  // Reset for next time
+      RCLCPP_WARN(rclcpp::get_logger("SearchState"), 
+                  "SUPER STUCK! Starting aggressive exploration recovery.");
+    }
+    
     // Force a long turn maneuver to escape
     is_turning_ = true;
     turn_remaining_cycles_ = 30;  // 3 seconds of turning
     current_turn_direction_ = turn_direction_dist(gen);  // Random direction
-    cmd.linear.x = -0.2;  // Back up while turning
-    cmd.angular.z = (current_turn_direction_ == 0) ? 1.5 : -1.5;  // Very aggressive turn
+    cmd.linear.x = -0.08;  // Back up while turning (reduced to avoid maxVelocity)
+    cmd.angular.z = (current_turn_direction_ == 0) ? 0.35 : -0.35;  // Turn (reduced for safe wheel vel)
     return cmd;
   }
   
-  // If too close to wall, back up and turn more aggressively
-  // FIX: Add randomized back-up and turn to prevent bunching
+  // SUPER STUCK recovery - aggressive exploration pattern
+  if (in_super_stuck_recovery_) {
+    super_stuck_cycles_--;
+    
+    if (super_stuck_cycles_ <= 0) {
+      // Move to next phase
+      super_stuck_phase_++;
+      super_stuck_cycles_ = 60;  // Reset cycles for next phase
+      
+      if (super_stuck_phase_ > 2) {
+        // Finished all phases, exit super stuck mode
+        in_super_stuck_recovery_ = false;
+        super_stuck_phase_ = 0;
+        RCLCPP_INFO(rclcpp::get_logger("SearchState"), 
+                    "Super stuck recovery complete - resuming normal exploration.");
+      }
+    }
+    
+    // Execute current phase
+    switch (super_stuck_phase_) {
+      case 0:  // Phase 0: Spin 360° to scan surroundings
+        cmd.linear.x = 0.0;
+        cmd.angular.z = 0.35;  // Full spin
+        break;
+      case 1:  // Phase 1: Move forward in new direction
+        cmd.linear.x = 0.15;  // Forward
+        cmd.angular.z = 0.0;
+        break;
+      case 2:  // Phase 2: Turn to random direction and move
+        cmd.linear.x = 0.1;
+        cmd.angular.z = (current_turn_direction_ == 0) ? 0.2 : -0.2;
+        break;
+      default:
+        in_super_stuck_recovery_ = false;
+        break;
+    }
+    return cmd;
+  }
+  
+  // If too close to wall, back up and turn toward clear direction
+  // Uses randomized turn direction to prevent multiple robots from bunching together
   if (min_distance < too_close_threshold) {
-    cmd.linear.x = -0.2;  // Back up (reduced from -0.4 for smoother motion)
+    cmd.linear.x = -0.1;  // Back up (reduced to prevent maxVelocity overflow)
     // Find direction with most clearance
     double best_clearance = 0.0;
     size_t best_escape_idx = scan->ranges.size() / 2;
@@ -219,7 +261,7 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
       }
     }
     // Turn toward the direction with most clearance
-    // FIX: Add randomization to prevent all robots from turning the same way
+    // Randomization prevents all robots from turning the same direction simultaneously
     double escape_angle = angle_min + best_escape_idx * angle_increment;
     
     // If escape angle is ambiguous (near 0), use random direction
@@ -234,7 +276,7 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
     }
     
     // Proportional turn based on angle
-    cmd.angular.z = std::clamp(escape_angle * 2.0, -1.5, 1.5);  // Smooth, proportional turn
+    cmd.angular.z = std::clamp(escape_angle * 0.8, -0.35, 0.35);  // Smooth turn (clamped for safe wheel vel)
     return cmd;
   }
   
@@ -267,13 +309,13 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
     min_ahead_distance = safe_distance;  // Assume safe distance
   }
   
-  // FIX: Check if we're in the middle of a turn maneuver (aggressive scattering)
+  // Check if we're in the middle of a turn maneuver (aggressive scattering)
   if (is_turning_ && turn_remaining_cycles_ > 0) {
     // Continue turning for the remaining duration
     turn_remaining_cycles_--;
-    cmd.linear.x = 0.1;  // Slow forward while turning
+    cmd.linear.x = 0.05;  // Very slow forward while turning
     // Use the persistent random direction
-    cmd.angular.z = (current_turn_direction_ == 0) ? 1.0 : -1.0;  // Strong turn (90-180 degrees)
+    cmd.angular.z = (current_turn_direction_ == 0) ? 0.3 : -0.3;  // Turn (safe wheel vel)
     return cmd;
   } else if (is_turning_ && turn_remaining_cycles_ <= 0) {
     // Turn complete, resume normal exploration
@@ -287,18 +329,18 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
     
     if (has_frontier) {
       // Use frontier direction to escape from obstacles
-      cmd.angular.z = std::clamp(frontier_angle * 1.5, -1.2, 1.2);  // Strong turn toward frontier
-      cmd.linear.x = 0.15;  // Slow forward while turning toward frontier
+      cmd.angular.z = std::clamp(frontier_angle * 0.6, -0.3, 0.3);  // Turn toward frontier
+      cmd.linear.x = 0.08;  // Slow forward while turning toward frontier
     } else {
       // Fall back to lidar-based best direction
       double turn_strength = std::clamp((obstacle_threshold - min_ahead_distance) / obstacle_threshold, 0.3, 1.0);
       
       if (std::abs(best_angle) > 0.1) {
-        cmd.angular.z = (best_angle > 0) ? (0.6 * turn_strength) : (-0.6 * turn_strength);
-        cmd.linear.x = 0.1;  // Slow forward while turning
+        cmd.angular.z = (best_angle > 0) ? (0.3 * turn_strength) : (-0.3 * turn_strength);
+        cmd.linear.x = 0.05;  // Slow forward while turning
       } else {
         // Best direction is forward but obstacle there - turn away
-        // FIX: Start aggressive turn maneuver (1.0-2.0 seconds) for better scattering
+        // Start aggressive turn maneuver (1.0-2.0 seconds) for better scattering
         if (turn_direction_persistence_ <= 0) {
           // Time to pick a new random direction
           current_turn_direction_ = turn_direction_dist(gen);
@@ -312,29 +354,29 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
         turn_remaining_cycles_ = turn_duration_dist(gen);
         
         // Use the persistent random direction (0 = left/positive, 1 = right/negative)
-        cmd.angular.z = (current_turn_direction_ == 0) ? 1.0 : -1.0;  // Strong turn for 90-180 degrees
-        cmd.linear.x = 0.1;  // Slow forward while turning
+        cmd.angular.z = (current_turn_direction_ == 0) ? 0.3 : -0.3;  // Safe wheel vel
+        cmd.linear.x = 0.05;  // Slow forward while turning
       }
     }
   } else {
     // Path is clear - drive forward smoothly (DEFAULT: Always drive forward if clear)
     // Adjust speed based on distance to nearest obstacle (smooth deceleration)
     double speed_factor = std::min(min_distance / safe_distance, 1.0);
-    cmd.linear.x = 0.25 * speed_factor;  // Max 0.25 m/s, slower near walls
+    cmd.linear.x = 0.15 * speed_factor;  // Max 0.15 m/s (reduced for safe wheel vel)
     
     // IMPROVED: Prefer frontier direction if available, otherwise use best lidar direction
     if (has_frontier) {
       // Use map-based frontier direction (stronger bias toward unmapped areas)
-      cmd.angular.z = std::clamp(frontier_angle * 1.0, -0.8, 0.8);  // Turn toward frontier
+      cmd.angular.z = std::clamp(frontier_angle * 0.6, -0.3, 0.3);  // Turn toward frontier
     } else {
       // Fall back to lidar-based best direction
       double best_angle = angle_min + best_direction_idx * angle_increment;
       if (std::abs(best_angle) > 0.15) {  // If best direction is off-center
-        cmd.angular.z = std::clamp(best_angle * 0.5, -0.4, 0.4);  // Smooth, gentle turn
+        cmd.angular.z = std::clamp(best_angle * 0.4, -0.25, 0.25);  // Smooth, gentle turn
       } else {
         // Path is clear and straight ahead - drive forward (default behavior)
         cmd.angular.z = 0.0;
-        cmd.linear.x = 0.25;  // Full speed forward
+        cmd.linear.x = 0.15;  // Reduced max forward speed
       }
     }
   }
@@ -522,7 +564,7 @@ geometry_msgs::msg::Twist CoordinationState::getVelocityCommand(HiveController *
       
       // If very close to wall, back up while turning more aggressively
       if (min_distance < 0.5) {
-        cmd.linear.x = -0.4;  // Back up faster
+        cmd.linear.x = -0.08;  // Back up (safe for wheel vel)
         // Find direction with most clearance
         double best_clearance = 0.0;
         size_t best_escape_idx = scan->ranges.size() / 2;
@@ -537,7 +579,7 @@ geometry_msgs::msg::Twist CoordinationState::getVelocityCommand(HiveController *
         }
         // Turn toward direction with most clearance
         double escape_angle = scan->angle_min + best_escape_idx * scan->angle_increment;
-        cmd.angular.z = std::clamp(escape_angle * 2.0, -1.5, 1.5);  // Smooth proportional turn
+        cmd.angular.z = std::clamp(escape_angle * 0.8, -0.3, 0.3);  // Safe turn
         return cmd;
       }
     }
@@ -576,7 +618,7 @@ void ConvergenceState::handle(
   }
 }
 
-geometry_msgs::msg::Twist ConvergenceState::getVelocityCommand(HiveController * context)
+geometry_msgs::msg::Twist ConvergenceState::getVelocityCommand(HiveController * /* context */)
 {
   geometry_msgs::msg::Twist cmd;
   

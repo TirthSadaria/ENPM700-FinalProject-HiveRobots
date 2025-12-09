@@ -116,7 +116,7 @@ private:
   
   int search_duration_counter_ = 0;
   const double obstacle_distance_ = 0.5;
-  const double linear_velocity_ = 0.3;  // Forward velocity when path is clear
+  const double linear_velocity_ = 0.15;  // Reduced to prevent wheel maxVelocity overflow
   // Removed MAX_SEARCH_TIME - robot should stay in SEARCH until mapping is complete
   
   // Randomization for turn direction to prevent "lemming effect"
@@ -131,6 +131,13 @@ private:
   int stuck_counter_ = 0;  // Counts how long robot has been in same area
   double last_min_distance_ = 0.0;  // Last minimum distance to obstacles
   static constexpr int STUCK_THRESHOLD = 50;  // If stuck for 50 cycles (~5 seconds), force recovery
+  
+  // Super stuck detection - if multiple stuck recoveries fail, try new exploration
+  int stuck_recovery_count_ = 0;  // How many times we've entered stuck recovery
+  static constexpr int SUPER_STUCK_THRESHOLD = 3;  // After 3 failed recoveries, do aggressive exploration
+  bool in_super_stuck_recovery_ = false;  // Currently doing aggressive exploration
+  int super_stuck_phase_ = 0;  // Phase of super stuck recovery (0=spin, 1=forward, 2=turn)
+  int super_stuck_cycles_ = 0;  // Cycles remaining in current phase
 };
 
 /**
@@ -154,7 +161,7 @@ private:
   
   bool turn_right_;
   int coordination_timer_ = 0;
-  const double angular_velocity_ = 0.5;
+  const double angular_velocity_ = 0.35;  // Reduced to prevent wheel maxVelocity overflow
   const double clear_distance_ = 0.7;
   static constexpr int COORDINATION_TIME = 30;
 };
@@ -180,7 +187,7 @@ private:
   
   bool rotating_to_center_ = false;
   const double linear_velocity_ = 0.1;
-  const double angular_velocity_ = 0.5;
+  const double angular_velocity_ = 0.35;  // Reduced to prevent wheel maxVelocity overflow
 };
 
 }  // namespace hive_control
