@@ -1,19 +1,22 @@
 # Multi-Robot Map Merge Configuration
-# Using estimation mode (known_init_poses: false) for automatic alignment
+# Reference: https://github.com/robo-friends/m-explore-ros2
+#
+# Using known_init_poses: true since we know exact spawn coordinates
+# This bypasses unreliable feature-based estimation in simple environments
 
 map_merge:
   ros__parameters:
     # ==========================================
     # General Parameters
     # ==========================================
-    merging_rate: 2.0           # Hz - how often to merge maps
+    merging_rate: 1.0           # Hz - how often to merge maps
     discovery_rate: 0.5         # Hz - how often to discover new robots
-    estimation_rate: 1.0        # Hz - pose estimation rate
+    estimation_rate: 0.5        # Hz - pose estimation rate (not used when known_init_poses=true)
     
-    # CRITICAL: Use estimation mode - auto-detect map alignment
-    # This avoids the init_pose parameter format issues
-    known_init_poses: false
-    estimation_confidence: 0.25  # Lower threshold to accept matches (was 1.0)
+    # CRITICAL: Use known poses since we know spawn coordinates
+    # This is more reliable than feature-based estimation for simple environments
+    known_init_poses: true
+    estimation_confidence: 1.0  # Not used when known_init_poses=true
     
     # Topic names (without namespace)
     robot_map_topic: "map"

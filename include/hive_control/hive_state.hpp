@@ -116,7 +116,7 @@ private:
   
   int search_duration_counter_ = 0;
   const double obstacle_distance_ = 0.5;
-  const double linear_velocity_ = 0.3;  // Forward velocity when path is clear
+  const double linear_velocity_ = 0.15;  // Reduced to prevent wheel maxVelocity overflow
   // Removed MAX_SEARCH_TIME - robot should stay in SEARCH until mapping is complete
   
   // Randomization for turn direction to prevent "lemming effect"
@@ -154,7 +154,7 @@ private:
   
   bool turn_right_;
   int coordination_timer_ = 0;
-  const double angular_velocity_ = 0.5;
+  const double angular_velocity_ = 0.35;  // Reduced to prevent wheel maxVelocity overflow
   const double clear_distance_ = 0.7;
   static constexpr int COORDINATION_TIME = 30;
 };
@@ -180,7 +180,7 @@ private:
   
   bool rotating_to_center_ = false;
   const double linear_velocity_ = 0.1;
-  const double angular_velocity_ = 0.5;
+  const double angular_velocity_ = 0.35;  // Reduced to prevent wheel maxVelocity overflow
 };
 
 }  // namespace hive_control
