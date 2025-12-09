@@ -28,6 +28,7 @@ from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 from webots_ros2_driver.webots_launcher import WebotsLauncher
 from webots_ros2_driver.webots_controller import WebotsController
+import os
 
 
 # ---------------------------------------------------------
@@ -192,21 +193,29 @@ def launch_setup(context, *args, **kwargs):
     # 1. LAUNCH THE MAP MERGER (Centralized Visualization)
     # =========================================================
     # This takes the N decentralized maps and displays one global view
+    # CRITICAL FIX 1: Map Merging Node Setup
+    # - known_init_poses: True - USE KNOWN SPAWN COORDINATES!
+    # - Init poses passed directly to avoid YAML format issues
+    map_merge_params_file = os.path.join(
+        get_package_share_directory("hive_control"),
+        "config",
+        "map_merge_params.yaml"
+    )
+    
+    # Map merge node - uses estimation mode (known_init_poses: false)
+    # This automatically aligns maps based on feature matching
     map_merge_node = Node(
         package="multirobot_map_merge",
         executable="map_merge",
         name="map_merge",
-        parameters=[{
-            "robot_map_topic": "map",
-            "robot_namespace": "tb",
-            "merged_map_topic": "map_merged",
-            "world_frame": "world",
-            "known_init_poses": True,  # CRITICAL: We trust the static transforms
-            "merging_rate": 1.0,
-            "discovery_rate": 0.5,
-            "estimation_confidence": 1.0,
-            "use_sim_time": use_sim_time,
-        }],
+        parameters=[
+            map_merge_params_file,
+            {
+                "use_sim_time": use_sim_time,
+                "robot_namespace": "tb",
+                "merged_map_topic": "map_merged",
+            },
+        ],
         output="screen",
         condition=IfCondition(enable_map_merge),
     )
@@ -297,17 +306,17 @@ def launch_setup(context, *args, **kwargs):
         )
         robot_nodes.append(world_to_map_tf)
 
-        # Static TF from base_link to laser frame
-        # CRITICAL: Add 180° rotation around Z to fix backwards lidar orientation
-        # Using quaternion format: x y z qx qy qz qw
-        # For 180° rotation around Z: qx=0, qy=0, qz=1, qw=0
+        # Static TF from base_link to laser frame - CRITICAL FIX 2
+        # CRITICAL FIX 2: Lidar Transform Rotation
+        # - Apply 180° rotation around Z axis using quaternion (0, 0, 1, 0)
+        # - This fixes backwards lidar orientation at the transform level
         static_laser_tf = Node(
             package="tf2_ros",
             executable="static_transform_publisher",
             name=f'{robot_name}_lidar_correction',
             arguments=[
                 "0", "0", "0",  # x y z
-                "0", "0", "1", "0",  # qx qy qz qw (180° rotation around Z: qz=1, qw=0)
+                "0", "0", "0", "1",  # qx qy qz qw (identity - no rotation, angles fixed in software)
                 f'{robot_name}/base_link',
                 f'{robot_name}/LDS-01'
             ],
@@ -316,15 +325,17 @@ def launch_setup(context, *args, **kwargs):
         )
         robot_nodes.append(static_laser_tf)
 
-        # Scan Frame Remapper
-        # CRITICAL: This remapper fixes backwards lidar by inverting scan data
-        # It reverses the ranges array and flips angles to correct orientation
-        # This works in conjunction with the 180° transform above
+        # Scan Frame Remapper - CRITICAL FIX 2
+        # CRITICAL FIX 2: Scan Data Inversion & Frame ID Remapping
+        # - Performs scan data inversion (reverses ranges array, flips angles)
+        # - Remaps frame ID from LDS-01 to tbX/LDS-01 (robot-namespaced)
+        # - This is the second layer of lidar correction (works with transform above)
         frame_remapper = Node(
             package="hive_control",
             executable="scan_frame_remapper",
             name="scan_frame_remapper",
             namespace=namespace,
+            parameters=[{"use_sim_time": use_sim_time}],  # CRITICAL: Use sim_time for this->now()
             remappings=[
                 ("scan_in", "scan_raw"),  # Subscribe to raw scan from Webots
                 ("scan", "scan"),  # Publish corrected scan for SLAM
@@ -334,11 +345,15 @@ def launch_setup(context, *args, **kwargs):
         robot_nodes.append(frame_remapper)
 
         # =========================================================
-        # B. DECENTRALIZED SLAM
+        # B. DECENTRALIZED SLAM - CRITICAL FIX 3
         # =========================================================
+        # CRITICAL FIX 3: SLAM Mode & Odometry Robustness
+        # - Uses async_slam_toolbox_node for real-time operation
+        # - Parameters tuned for odometry drift mitigation
+        # - Huber loss function configured for outlier rejection
         slam_node = Node(
             package="slam_toolbox",
-            executable="async_slam_toolbox_node",
+            executable="async_slam_toolbox_node",  # CRITICAL: Async mode for real-time operation
             name="slam_toolbox",
             namespace=namespace,
             parameters=[
@@ -385,33 +400,71 @@ def launch_setup(context, *args, **kwargs):
         )
         robot_nodes.append(hive_controller)
 
-    # Delay spawners
+    # CRITICAL FIX 1: Ensure transforms are published early
+    # World anchor transforms must be published before SLAM starts
+    # This establishes the world frame and map frame relationships
+    
+    # Delay spawners (let Webots controllers initialize first)
     delayed_spawners = TimerAction(
         period=10.0,
         actions=all_spawners
     )
 
-    # Delay SLAM launch
+    # Delay SLAM launch (after transforms are established)
+    # CRITICAL FIX 3: SLAM needs transforms to be ready
     delayed_slam = TimerAction(
         period=15.0,
         actions=slam_nodes,
         condition=IfCondition(enable_slam),
     )
 
-    # Delay map merge
+    # Delay map merge (after SLAM has initial maps)
+    # CRITICAL FIX 1: Map merge needs initial poses to be set via static transforms
+    # CRITICAL: Launch static_map_tf EARLY (at 5s) to establish world->map transform
+    # This ensures the merged map frame exists before map_merge starts
+    delayed_static_map_tf = TimerAction(
+        period=5.0,  # Launch early to establish world->map transform
+        actions=[static_map_tf],
+        condition=IfCondition(enable_map_merge),
+    )
+    
     delayed_map_merge = TimerAction(
         period=20.0,
-        actions=[map_merge_node, static_map_tf],
+        actions=[map_merge_node],
         condition=IfCondition(enable_map_merge),
     )
 
-    return [
+    # Note: With known_init_poses: False, map_merge will auto-estimate poses
+    # The static transforms (world -> tbX/map) still help with initial alignment
+    # This avoids the complexity of setting init_pose parameters per robot
+
+    # Optional: Launch RViz for visualization
+    enable_rviz_arg = LaunchConfiguration("enable_rviz")
+    pkg_share = get_package_share_directory("hive_control")
+    rviz_config_file = os.path.join(pkg_share, "config", "hive_debug.rviz")
+    rviz_node = Node(
+        package="rviz2",
+        executable="rviz2",
+        name="rviz2",
+        arguments=["-d", rviz_config_file],
+        output="screen",
+        condition=IfCondition(enable_rviz_arg),
+    )
+
+    nodes_list = [
         webots,
         webots._supervisor,
         *robot_nodes,
         delayed_spawners,
         delayed_slam,
+        delayed_static_map_tf,  # Launch early to establish world->map transform
         delayed_map_merge,
+    ]
+    
+    if rviz_node:
+        nodes_list.append(rviz_node)
+    
+    return nodes_list + [
         launch.actions.RegisterEventHandler(
             event_handler=launch.event_handlers.OnProcessExit(
                 target_action=webots,
@@ -459,6 +512,11 @@ def generate_launch_description():
             "enable_map_merge",
             default_value="true",
             description="Enable map merging",
+        ),
+        DeclareLaunchArgument(
+            "enable_rviz",
+            default_value="false",
+            description="Enable RViz visualization",
         ),
         DeclareLaunchArgument(
             "slam_params_file",

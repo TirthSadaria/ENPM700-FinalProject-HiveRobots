@@ -1,0 +1,26 @@
+# Multi-Robot Map Merge Configuration
+# Using estimation mode (known_init_poses: false) for automatic alignment
+
+map_merge:
+  ros__parameters:
+    # ==========================================
+    # General Parameters
+    # ==========================================
+    merging_rate: 2.0           # Hz - how often to merge maps
+    discovery_rate: 0.5         # Hz - how often to discover new robots
+    estimation_rate: 1.0        # Hz - pose estimation rate
+    
+    # CRITICAL: Use estimation mode - auto-detect map alignment
+    # This avoids the init_pose parameter format issues
+    known_init_poses: false
+    estimation_confidence: 0.25  # Lower threshold to accept matches (was 1.0)
+    
+    # Topic names (without namespace)
+    robot_map_topic: "map"
+    robot_map_updates_topic: "map_updates"
+    merged_map_topic: "map"
+    world_frame: "world"
+    
+    # Robot namespace prefix - map_merge looks for tb1, tb2, etc.
+    robot_namespace: "tb"
+

@@ -19,9 +19,15 @@
 
 #include <memory>
 #include <string>
-#include <algorithm>  // For std::reverse
+#include <algorithm>  // For std::reverse, std::swap
+#include <vector>
+#include <cmath>  // For M_PI
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 class ScanFrameRemapper : public rclcpp::Node
 {
@@ -76,24 +82,27 @@ private:
     auto remapped_msg = std::make_shared<sensor_msgs::msg::LaserScan>(*msg);
     remapped_msg->header.frame_id = remapped_frame_id_;
     
-    // CRITICAL FIX: Invert scan data to fix backwards lidar orientation
-    // The transform rotation may not be working correctly, so we need to invert the scan data
-    // This ensures that when robot moves forward, obstacles appear ahead, not behind
-    if (!remapped_msg->ranges.empty()) {
-      // Reverse ranges array (flips scan 180 degrees)
+    // CRITICAL FIX: Use current node time instead of original scan timestamp
+    remapped_msg->header.stamp = this->now();
+    
+    // CRITICAL FIX: Normalize scan angles for SLAM compatibility
+    // Webots lidar outputs: angle_min=π, angle_max=-π, angle_increment=-0.017 (inverted)
+    // SLAM expects: angle_min=-π, angle_max=π, angle_increment=+0.017 (standard)
+    // Fix: Reverse the ranges array and swap angle_min/max
+    if (remapped_msg->angle_increment < 0) {
+      // Reverse the ranges array
       std::reverse(remapped_msg->ranges.begin(), remapped_msg->ranges.end());
       
-      // Flip the angle range
-      double old_min = remapped_msg->angle_min;
-      double old_max = remapped_msg->angle_max;
-      remapped_msg->angle_min = -old_max;
-      remapped_msg->angle_max = -old_min;
-      
-      // Ensure standard convention: angle_min < angle_max
-      if (remapped_msg->angle_min > remapped_msg->angle_max) {
-        std::swap(remapped_msg->angle_min, remapped_msg->angle_max);
-        remapped_msg->angle_increment = -remapped_msg->angle_increment;
+      // Also reverse intensities if present
+      if (!remapped_msg->intensities.empty()) {
+        std::reverse(remapped_msg->intensities.begin(), remapped_msg->intensities.end());
       }
+      
+      // Swap angle_min and angle_max (don't negate, just swap!)
+      // Original: angle_min=3.14, angle_max=-3.14, increment=-0.017
+      // After swap: angle_min=-3.14, angle_max=3.14, increment=+0.017
+      std::swap(remapped_msg->angle_min, remapped_msg->angle_max);
+      remapped_msg->angle_increment = -remapped_msg->angle_increment;
     }
     
     // Publish the remapped message

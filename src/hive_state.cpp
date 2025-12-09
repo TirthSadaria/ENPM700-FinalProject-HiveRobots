@@ -197,15 +197,15 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
     is_turning_ = true;
     turn_remaining_cycles_ = 30;  // 3 seconds of turning
     current_turn_direction_ = turn_direction_dist(gen);  // Random direction
-    cmd.linear.x = -0.2;  // Back up while turning
-    cmd.angular.z = (current_turn_direction_ == 0) ? 1.5 : -1.5;  // Very aggressive turn
+    cmd.linear.x = -0.1;  // Back up while turning (reduced to avoid maxVelocity)
+    cmd.angular.z = (current_turn_direction_ == 0) ? 0.5 : -0.5;  // Turn (further reduced for safe wheel vel)
     return cmd;
   }
   
   // If too close to wall, back up and turn more aggressively
   // FIX: Add randomized back-up and turn to prevent bunching
   if (min_distance < too_close_threshold) {
-    cmd.linear.x = -0.2;  // Back up (reduced from -0.4 for smoother motion)
+    cmd.linear.x = -0.1;  // Back up (reduced to prevent maxVelocity overflow)
     // Find direction with most clearance
     double best_clearance = 0.0;
     size_t best_escape_idx = scan->ranges.size() / 2;
@@ -234,7 +234,7 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
     }
     
     // Proportional turn based on angle
-    cmd.angular.z = std::clamp(escape_angle * 2.0, -1.5, 1.5);  // Smooth, proportional turn
+    cmd.angular.z = std::clamp(escape_angle * 1.0, -0.5, 0.5);  // Smooth turn (clamped for safe wheel vel)
     return cmd;
   }
   
@@ -273,7 +273,7 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
     turn_remaining_cycles_--;
     cmd.linear.x = 0.1;  // Slow forward while turning
     // Use the persistent random direction
-    cmd.angular.z = (current_turn_direction_ == 0) ? 1.0 : -1.0;  // Strong turn (90-180 degrees)
+    cmd.angular.z = (current_turn_direction_ == 0) ? 0.6 : -0.6;  // Turn (reduced for safe wheel vel)
     return cmd;
   } else if (is_turning_ && turn_remaining_cycles_ <= 0) {
     // Turn complete, resume normal exploration
@@ -287,7 +287,7 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
     
     if (has_frontier) {
       // Use frontier direction to escape from obstacles
-      cmd.angular.z = std::clamp(frontier_angle * 1.5, -1.2, 1.2);  // Strong turn toward frontier
+      cmd.angular.z = std::clamp(frontier_angle * 0.8, -0.5, 0.5);  // Turn toward frontier (clamped)
       cmd.linear.x = 0.15;  // Slow forward while turning toward frontier
     } else {
       // Fall back to lidar-based best direction
@@ -312,7 +312,7 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
         turn_remaining_cycles_ = turn_duration_dist(gen);
         
         // Use the persistent random direction (0 = left/positive, 1 = right/negative)
-        cmd.angular.z = (current_turn_direction_ == 0) ? 1.0 : -1.0;  // Strong turn for 90-180 degrees
+        cmd.angular.z = (current_turn_direction_ == 0) ? 0.6 : -0.6;  // Turn (reduced for safe wheel vel)
         cmd.linear.x = 0.1;  // Slow forward while turning
       }
     }
@@ -325,7 +325,7 @@ geometry_msgs::msg::Twist SearchState::getVelocityCommand(HiveController * conte
     // IMPROVED: Prefer frontier direction if available, otherwise use best lidar direction
     if (has_frontier) {
       // Use map-based frontier direction (stronger bias toward unmapped areas)
-      cmd.angular.z = std::clamp(frontier_angle * 1.0, -0.8, 0.8);  // Turn toward frontier
+      cmd.angular.z = std::clamp(frontier_angle * 0.8, -0.5, 0.5);  // Turn toward frontier (clamped)
     } else {
       // Fall back to lidar-based best direction
       double best_angle = angle_min + best_direction_idx * angle_increment;
@@ -522,7 +522,7 @@ geometry_msgs::msg::Twist CoordinationState::getVelocityCommand(HiveController *
       
       // If very close to wall, back up while turning more aggressively
       if (min_distance < 0.5) {
-        cmd.linear.x = -0.4;  // Back up faster
+        cmd.linear.x = -0.15;  // Back up (reduced for safe wheel vel)
         // Find direction with most clearance
         double best_clearance = 0.0;
         size_t best_escape_idx = scan->ranges.size() / 2;
@@ -537,7 +537,7 @@ geometry_msgs::msg::Twist CoordinationState::getVelocityCommand(HiveController *
         }
         // Turn toward direction with most clearance
         double escape_angle = scan->angle_min + best_escape_idx * scan->angle_increment;
-        cmd.angular.z = std::clamp(escape_angle * 2.0, -1.5, 1.5);  // Smooth proportional turn
+        cmd.angular.z = std::clamp(escape_angle * 1.0, -0.5, 0.5);  // Smooth turn (clamped)
         return cmd;
       }
     }

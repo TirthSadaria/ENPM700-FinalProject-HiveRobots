@@ -1,89 +1,96 @@
 # SLAM Toolbox Configuration for Multi-Robot System
-# Generic configuration - frame names will be overridden per robot in launch file
-# Tuned for decentralized architecture as per slam_toolbox documentation
+# Based on working config from friend + tuned for Webots simulation
+# Frame names will be overridden per robot in launch file
 
 slam_toolbox:
   ros__parameters:
     # ----------------------------------------------------
-    # CORE SLAM SETTINGS
+    # SOLVER SETTINGS (Same as friend's working config)
     # ----------------------------------------------------
     solver_plugin: solver_plugins::CeresSolver
     ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
     ceres_preconditioner: SCHUR_JACOBI
     ceres_trust_strategy: LEVENBERG_MARQUARDT
     ceres_dogleg_type: TRADITIONAL_DOGLEG
-    ceres_loss_function: None
+    ceres_loss_function: None  # Friend uses None, not HuberLoss
 
-    # FRAMES (Generic - will be remapped in launch)
-    # The docs say: "Each robot manages its own map->odom transform"
+    # FRAMES (Will be overridden per robot in launch file)
     odom_frame: odom
     map_frame: map
-    base_frame: base_link
+    base_frame: base_link  # Webots uses base_link, not base_footprint
     scan_topic: /scan
-    mode: mapping  # online_async
+    mode: mapping
+    use_map_saver: true
 
     # ----------------------------------------------------
-    # TUNING FOR WEBOTS (Perfect Odometry)
+    # TIMING & PERFORMANCE (From friend's working config)
     # ----------------------------------------------------
     use_sim_time: true
     debug_logging: false
-    throttle_scans: 1
-    transform_publish_period: 0.05  # 20Hz
-    map_update_interval: 0.5        # Fast updates
-    resolution: 0.05                 # 5cm grid
+    throttle_scans: 5              # Heavily throttle to reduce CPU load
+    transform_publish_period: 0.1  # Slower TF publish (10Hz)
+    map_update_interval: 3.0       # Slow map updates to reduce load
+    resolution: 0.05               # 5cm grid
 
-    # SENSOR DATA
-    max_laser_range: 3.5  # Matches LDS-01
+    # CRITICAL: Relaxed TF settings to handle Webots timing issues
+    transform_timeout: 5.0         # Very generous timeout for TF lookup
+    tf_buffer_duration: 300.0      # 5 minutes of TF history
+    stack_size_to_use: 40000000    # Large stack for big maps
+
+    # SENSOR DATA (Match LDS-01 lidar specs)
     min_laser_range: 0.1
+    max_laser_range: 3.5
     minimum_laser_range: 0.1  # Alias for compatibility
 
     # ----------------------------------------------------
-    # LOOP CLOSURE (The "Snap" Logic)
+    # TRAVEL CONSTRAINTS (Relaxed for Webots timing)
+    # ----------------------------------------------------
+    minimum_time_interval: 1.0     # Only process every 1 second
+    minimum_travel_distance: 0.20  # Process every 20cm (reduced frequency)
+    minimum_travel_heading: 0.30   # Process every ~17° (reduced frequency)
+
+    # ----------------------------------------------------
+    # SCAN MATCHING (From friend's working config)
+    # ----------------------------------------------------
+    use_scan_matching: true
+    use_scan_barycenter: true
+    scan_buffer_size: 10           # Reduced to prevent queue overflow
+    scan_queue_size: 1             # Only keep latest scan (prevents old message backlog)
+    scan_buffer_maximum_scan_distance: 10.0
+    link_match_minimum_response_fine: 0.1
+    link_scan_maximum_distance: 1.5
+
+    # ----------------------------------------------------
+    # LOOP CLOSURE (From friend's working config)
     # ----------------------------------------------------
     do_loop_closing: true
-    loop_search_maximum_distance: 10.0
-    loop_match_minimum_chain_size: 3      # Lower = Faster loops
-    loop_match_minimum_response_coarse: 0.25  # More forgiving
-    loop_match_minimum_response_fine: 0.35    # More forgiving
+    loop_search_maximum_distance: 3.0      # Friend: 3.0
+    loop_match_minimum_chain_size: 10      # Friend: 10
+    loop_match_maximum_variance_coarse: 3.0
+    loop_match_minimum_response_coarse: 0.35  # Friend: 0.35
+    loop_match_minimum_response_fine: 0.45    # Friend: 0.45
 
     # ----------------------------------------------------
-    # CORRELATION (Scan Matching)
+    # CORRELATION PARAMETERS (From friend's working config)
     # ----------------------------------------------------
-    # High deviation allows the matcher to "snap" walls even if odom drifts slightly
-    correlation_search_space_dimension: 2.0
-    correlation_search_space_resolution: 0.05
-    correlation_search_space_smear_deviation: 0.05
-
-    # Additional parameters for stability
-    scan_buffer_size: 300
-    scan_buffer_maximum_scan_distance: 2.0
-    link_match_minimum_response: 0.3
-    link_scan_maximum_distance: 2.5
-    distance_variance_penalty: 0.3
-    angle_variance_penalty: 0.5
-    fine_search_angle_offset: 0.001745
-    coarse_search_angle_offset: 0.1745
-    coarse_angle_resolution: 0.01745
-    minimum_angle_penalty: 0.95
-    minimum_distance_penalty: 0.7
-    use_response_expansion: true
+    correlation_search_space_dimension: 0.5   # Friend: 0.5
+    correlation_search_space_resolution: 0.01 # Friend: 0.01
+    correlation_search_space_smear_deviation: 0.1
 
     # Loop closure search space
-    loop_search_space_dimension: 3.0
+    loop_search_space_dimension: 8.0          # Friend: 8.0
     loop_search_space_resolution: 0.05
-    loop_search_space_smear_deviation: 0.1
-    loop_match_maximum_variance_coarse: 3.0
+    loop_search_space_smear_deviation: 0.03   # Friend: 0.03
 
-    # Scan processing
-    scan_queue_size: 10
-    map_publish_rate: 1.0
-    scan_matcher_type: "scan_matcher"
-    minimum_time_interval: 0.1
-    minimum_travel_distance: 0.1
-    minimum_travel_angle: 0.2
-
-    # Restart parameters
-    restart_time: 0.0
-    restart_time_std: 0.0
-    restart_time_bump: 0.0
-    restart_time_bump_std: 0.0
+    # Scan matcher fine-tuning
+    distance_variance_penalty: 0.5            # Friend: 0.5
+    angle_variance_penalty: 1.0               # Friend: 1.0
+    fine_search_angle_offset: 0.00349         # Friend: 0.00349
+    coarse_search_angle_offset: 0.349         # Friend: 0.349
+    coarse_angle_resolution: 0.0349           # Friend: 0.0349
+    minimum_angle_penalty: 0.9                # Friend: 0.9
+    minimum_distance_penalty: 0.5             # Friend: 0.5
+    use_response_expansion: true
+    min_pass_through: 2
+    occupancy_threshold: 0.1
+    enable_interactive_mode: true
