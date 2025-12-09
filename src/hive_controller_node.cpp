@@ -29,32 +29,11 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "hive_control/hive_controller.hpp"
+#include "hive_control/hive_controller_node.hpp"
 
 using std::chrono_literals::operator""ms;
 
-/**
- * @struct MapGrowthData
- * @brief Data structure for tracking map growth over time
- */
-struct MapGrowthData {
-  int known_cell_count = 0;
-  rclcpp::Time timestamp;
-};
-
-/**
- * @class HiveControllerNode
- * @brief ROS2 node implementing robot behavior via HiveContext
- *
- * This node subscribes to laser scan data and publishes velocity commands
- * by delegating decision logic to the State-pattern-based HiveContext.
- */
-class HiveControllerNode : public rclcpp::Node
-{
-public:
-  /**
-   * @brief Constructor - sets up publishers, subscribers, and timer
-   */
-  HiveControllerNode()
+HiveControllerNode::HiveControllerNode()
   : Node("hive_controller_node")
   {
     // Get namespace to pass to controller for robot ID extraction
@@ -128,13 +107,8 @@ public:
     RCLCPP_INFO(this->get_logger(), "HIVE controller node initialized");
   }
 
-private:
-  /**
-   * @brief Callback for laser scan messages
-   * @param msg Laser scan data
-   */
-  void laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
-  {
+void HiveControllerNode::laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
+{
     // Validate scan data before processing
     if (!msg || msg->ranges.empty()) {
       RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000, 
@@ -192,10 +166,7 @@ private:
     }
   }
 
-  /**
-   * @brief Callback for map messages (for frontier exploration and completion detection)
-   */
-  void mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
+void HiveControllerNode::mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
   {
     latest_map_ = msg;
     // Also update the controller with the latest map for frontier exploration
@@ -271,10 +242,7 @@ private:
     }
   }
   
-  /**
-   * @brief Save the merged map as PNG file when mapping is complete
-   */
-  void saveMapAsPNG()
+void HiveControllerNode::saveMapAsPNG()
   {
     static bool map_saved = false;  // Only save once
     if (map_saved) {
@@ -304,10 +272,7 @@ private:
     system(merged_command.c_str());
   }
   
-  /**
-   * @brief Timer callback to publish velocity commands
-   */
-  void timerCallback()
+void HiveControllerNode::timerCallback()
   {
     // Stop if mapping is complete
     if (mapping_complete_) {
@@ -331,43 +296,3 @@ private:
     velocity_pub_->publish(cmd);
   }
 
-  /// HIVE controller context (State pattern brain)
-  std::unique_ptr<hive_control::HiveController> controller_;
-
-  /// Publisher for velocity commands
-  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr velocity_pub_;
-
-  /// Subscriber for laser scan
-  rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr laser_sub_;
-  
-  /// Subscriber for map (for frontier exploration)
-  rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
-  
-  /// Latest map data
-  nav_msgs::msg::OccupancyGrid::SharedPtr latest_map_;
-  
-  /// Map completion detection (growth rate monitoring)
-  bool mapping_complete_ = false;
-  bool enable_map_completion_ = true;
-  
-  // Map growth monitoring (better than unknown percentage)
-  std::vector<MapGrowthData> map_growth_history_;  // Store history for growth rate calculation
-  static constexpr double GROWTH_CHECK_INTERVAL = 30.0;  // Check growth every 30 seconds
-  static constexpr double MIN_GROWTH_RATE = 0.01;  // 1% growth threshold
-  static constexpr double MIN_EXPLORATION_TIME = 300.0;  // Minimum 300 seconds (5 minutes) - extended for rescue mission to ensure complete mapping
-  
-  /// Timer for publishing commands
-  rclcpp::TimerBase::SharedPtr timer_;
-};
-
-/**
- * @brief Main function
- */
-int main(int argc, char ** argv)
-{
-  rclcpp::init(argc, argv);
-  auto node = std::make_shared<HiveControllerNode>();
-  rclcpp::spin(node);
-  rclcpp::shutdown();
-  return 0;
-}
