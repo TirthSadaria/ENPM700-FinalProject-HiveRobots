@@ -50,7 +50,7 @@ slam_toolbox:
     minimum_travel_heading: 0.15   # Process every ~8.5°
 
     # ----------------------------------------------------
-    # SCAN MATCHING
+    # SCAN MATCHING (Tighter for sharper maps)
     # Reference: https://docs.ros.org/en/ros2_packages/humble/api/slam_toolbox/
     # ----------------------------------------------------
     use_scan_matching: true
@@ -58,18 +58,18 @@ slam_toolbox:
     scan_buffer_size: 20           # Buffer for scan chain
     scan_queue_size: 1             # Always 1 for async mode (per docs)
     scan_buffer_maximum_scan_distance: 10.0
-    link_match_minimum_response_fine: 0.1
-    link_scan_maximum_distance: 1.5
+    link_match_minimum_response_fine: 0.3  # Higher = stricter matching (was 0.1)
+    link_scan_maximum_distance: 1.0        # Tighter constraint (was 1.5)
 
     # ----------------------------------------------------
-    # LOOP CLOSURE (From friend's working config)
+    # LOOP CLOSURE (Tuned for better map quality)
     # ----------------------------------------------------
     do_loop_closing: true
-    loop_search_maximum_distance: 3.0      # Friend: 3.0
-    loop_match_minimum_chain_size: 10      # Friend: 10
-    loop_match_maximum_variance_coarse: 3.0
-    loop_match_minimum_response_coarse: 0.35  # Friend: 0.35
-    loop_match_minimum_response_fine: 0.45    # Friend: 0.45
+    loop_search_maximum_distance: 4.0      # Search range for loops
+    loop_match_minimum_chain_size: 5       # Lower = more loop closures (was 10)
+    loop_match_maximum_variance_coarse: 2.0  # Tighter (was 3.0)
+    loop_match_minimum_response_coarse: 0.4  # Higher = stricter (was 0.35)
+    loop_match_minimum_response_fine: 0.5    # Higher = stricter (was 0.45)
 
     # ----------------------------------------------------
     # CORRELATION PARAMETERS (From friend's working config)
