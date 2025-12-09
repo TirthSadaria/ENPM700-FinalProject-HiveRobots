@@ -101,6 +101,8 @@ ENPM700-FinalProject-HiveRobots/
 ├── include/hive_control/         # Header files
 │   ├── hive_controller.hpp
 │   └── hive_state.hpp
+├── test/
+│   └── test_hive_control.cpp     # Unit tests (gtest)
 ├── launch/
 │   └── hive_slam_final.launch.py # Main launch file
 ├── config/
@@ -172,7 +174,26 @@ ros2 topic echo /tb1/map --once | grep -E "width|height|resolution"
 ros2 topic echo /map_merged --once | grep -E "width|height|resolution"
 ```
 
+---
 
+## Testing
+
+The project includes **Level 1 and Level 2 unit tests** using Google Test (gtest) framework to ensure code quality and reliability. The test suite covers core functionality including controller instantiation, battery management, rotation direction toggling, lidar scan angle normalization, and obstacle detection threshold validation.
+
+```bash
+# Build and run tests
+colcon build
+source install/setup.bash
+
+# Run unit tests directly
+./build/hive_control/test_hive_control
+
+# Or run all tests with colcon
+colcon test --packages-select hive_control
+colcon test-result --verbose
+```
+
+---
 
 ## Dependencies
 
