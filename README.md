@@ -1,8 +1,8 @@
 # ENPM700 Final Project: Multi-Robot SLAM System
 
-[![Build Status](https://github.com/TirthSadaria/ENPM700-FinalProject-HiveRobots/actions/workflows/run-unit-test-and-upload-codecov.yml/badge.svg)](https://github.com/TirthSadaria/ENPM700-FinalProject-HiveRobots/actions/workflows/run-unit-test-and-upload-codecov.yml)
+[![Build Status](https://github.com/TirthSadaria/ENPM700-FinalProject-HiveRobots/actions/workflows/run-unit-test-and-upload-codecov.yml/badge.svg?branch=phase-2)](https://github.com/TirthSadaria/ENPM700-FinalProject-HiveRobots/actions/workflows/run-unit-test-and-upload-codecov.yml)
 
-[![codecov](https://codecov.io/gh/TirthSadaria/ENPM700-FinalProject-HiveRobots/graph/badge.svg)](https://codecov.io/gh/TirthSadaria/ENPM700-FinalProject-HiveRobots)
+[![codecov](https://codecov.io/gh/TirthSadaria/ENPM700-FinalProject-HiveRobots/branch/phase-2/graph/badge.svg)](https://codecov.io/gh/TirthSadaria/ENPM700-FinalProject-HiveRobots)
 
 ## Overview
 

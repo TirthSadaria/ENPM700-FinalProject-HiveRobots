@@ -152,10 +152,10 @@ if(WANT_COVERAGE)
   
   if(LCOV_PATH AND GCOVR_PATH)
     # Custom target to generate coverage report
+    # Note: Tests must be run first (via colcon test) to generate .gcda files
     add_custom_target(test_coverage
-      COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
       COMMAND ${LCOV_PATH} --directory . --capture --output-file test_coverage.info
-      COMMAND ${LCOV_PATH} --remove test_coverage.info '/usr/*' '*/test/*' '*/build/*' --output-file test_coverage.info
+      COMMAND ${LCOV_PATH} --remove test_coverage.info '/usr/*' '*/test/*' '*/build/*' '*/install/*' --output-file test_coverage.info
       COMMAND ${LCOV_PATH} --list test_coverage.info
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
       COMMENT "Generating code coverage report"
