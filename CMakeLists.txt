@@ -140,7 +140,6 @@ if(BUILD_TESTING)
   )
   target_link_libraries(test_hive_controller
     hive_logic
-    GTest::gtest_main
   )
   ament_target_dependencies(test_hive_controller
     rclcpp

@@ -340,12 +340,5 @@ TEST_F(HiveControllerTest, TestEmptyScanHandling) {
   EXPECT_TRUE(std::isfinite(cmd_vel.angular.z));
 }
 
-// =============================================================================
-// Main function
-// =============================================================================
-int main(int argc, char ** argv) {
-  testing::InitGoogleTest(&argc, argv);
-  int result = RUN_ALL_TESTS();
-  return result;
-}
+// Note: main() is provided automatically by ament_add_gtest via gtest_main
 
